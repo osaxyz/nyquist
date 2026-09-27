@@ -23,14 +23,14 @@ An MCP server that gives an autonomous agent its own Ethereum wallet. The keys s
 1. Run `npm create nyquist`. It creates the keys, registers the wallet, and adds this server to your agent. To add it by hand instead, register it as a stdio MCP server. In Claude Code:
 
 ```sh
-claude mcp add nyquist --scope user -- npx --prefix=~/.nyquist -y nyquist-mcp
+claude mcp add nyquist --scope user -- npx --prefix="$HOME/.nyquist" -y nyquist-mcp
 ```
 
 2. Ask your agent to set up the wallet. It calls `nyquist_setup` and returns the Safe address.
 3. Send Sepolia ETH to that address, at least 0.002 ETH for creating the Safe plus what you want to send.
 
 > [!TIP]
-> `--prefix=~/.nyquist` starts npx outside your project. Without it, npx refuses to run inside a project whose `package.json` requires another package manager through `devEngines`.
+> `--prefix` starts npx from `~/.nyquist` instead of your project. Without it, npx refuses to run inside a project whose `package.json` requires another package manager through `devEngines`.
 
 Try asking:
 
@@ -118,14 +118,14 @@ Calls to the Safe itself are refused, except for adding a recovery owner. Error 
 1. `npm create nyquist` を実行します。鍵を作り、ウォレットを登録し、このサーバーをエージェントに加えます。手で加えるときは、stdio の MCP サーバーとして登録します。Claude Code なら次のとおりです。
 
 ```sh
-claude mcp add nyquist --scope user -- npx --prefix=~/.nyquist -y nyquist-mcp
+claude mcp add nyquist --scope user -- npx --prefix="$HOME/.nyquist" -y nyquist-mcp
 ```
 
 2. エージェントにウォレットの用意を頼みます。`nyquist_setup` を呼んで、Safe のアドレスを返します。
 3. そのアドレスに Sepolia の ETH を送ります。Safe の作成費用の 0.002 ETH と、送りたい額を合わせた額以上を入れてください。
 
 > [!TIP]
-> `--prefix=~/.nyquist` は、npx をプロジェクトの外で起動するためのものです。これがないと、`package.json` の `devEngines` で別のパッケージマネージャーを指定したプロジェクトの中では、npx が起動を拒みます。
+> `--prefix` は、npx をプロジェクトではなく `~/.nyquist` から起動するためのものです。これがないと、`package.json` の `devEngines` で別のパッケージマネージャーを指定したプロジェクトの中では、npx が起動を拒みます。
 
 次のように頼んでみてください。
 

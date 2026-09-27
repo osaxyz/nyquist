@@ -41,7 +41,7 @@ pnpm exec turbo run typecheck build
 <summary>Try the packages locally</summary>
 <br>
 
-Pack both packages and point `NYQUIST_MCP_PACKAGE` at the nyquist-mcp tarball. The MCP settings then run `npx --prefix=~/.nyquist -y --package <tarball> nyquist-mcp`.
+Pack both packages and point `NYQUIST_MCP_PACKAGE` at the nyquist-mcp tarball. The MCP settings then run `npx --prefix=<absolute path of ~/.nyquist> -y --package <tarball> nyquist-mcp`.
 
 ```sh
 pnpm --filter nyquist-mcp --filter create-nyquist pack --pack-destination "$HOME/.nyquist/dev"
@@ -80,7 +80,7 @@ pnpm exec turbo run typecheck build
 <summary>手元でパッケージを試す</summary>
 <br>
 
-2つのパッケージの tarball を作り、`NYQUIST_MCP_PACKAGE` に nyquist-mcp の tarball を指定します。MCP の設定には `npx --prefix=~/.nyquist -y --package <その tarball> nyquist-mcp` が登録されます。
+2つのパッケージの tarball を作り、`NYQUIST_MCP_PACKAGE` に nyquist-mcp の tarball を指定します。MCP の設定には `npx --prefix=<~/.nyquist の絶対パス> -y --package <その tarball> nyquist-mcp` が登録されます。
 
 ```sh
 pnpm --filter nyquist-mcp --filter create-nyquist pack --pack-destination "$HOME/.nyquist/dev"
