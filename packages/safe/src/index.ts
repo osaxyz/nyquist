@@ -12,7 +12,6 @@ import {
     keccak256,
     toBytes,
     toEventSelector,
-    toFunctionSelector,
     zeroAddress,
     type Address,
     type Hex,
@@ -252,8 +251,6 @@ export const GUARD_STORAGE_SLOT = keccak256(toBytes("guard_manager.guard.address
 // モジュールの一覧の先頭を表す値。
 export const SENTINEL_MODULES: Address = "0x0000000000000000000000000000000000000001"
 
-// Safe 自身への呼び出しのうち、nyquist が中継してよいもの。復旧用オーナーを加える呼び出しだけを許す。
-export const ADD_OWNER_SELECTOR = toFunctionSelector("addOwnerWithThreshold(address,uint256)")
 
 // EIP-2028 の calldata のガス。0 のバイトは 4、それ以外は 16。
 export function calldataGas(data: Hex): bigint {
@@ -291,6 +288,48 @@ export function encodeCreateProxy(singleton: Address, initializer: Hex, saltNonc
         abi: PROXY_FACTORY_ABI,
         functionName: "createProxyWithNonce",
         args: [singleton, initializer, saltNonce],
+    })
+}
+
+// Multicall3。どのチェーンでも同じアドレスにある。https://github.com/mds1/multicall3
+// Safe の作成と最初の送金を1つの tx にまとめるのに使う。どちらかが失敗すれば、両方とも取り消される。
+export const MULTICALL3_ADDRESS: Address = "0xcA11bde05977b3631167028862bE2a173976CA11"
+
+const MULTICALL3_ABI = [
+    {
+        type: "function",
+        name: "aggregate3",
+        stateMutability: "payable",
+        inputs: [
+            {
+                name: "calls",
+                type: "tuple[]",
+                components: [
+                    { name: "target", type: "address" },
+                    { name: "allowFailure", type: "bool" },
+                    { name: "callData", type: "bytes" },
+                ],
+            },
+        ],
+        outputs: [
+            {
+                name: "returnData",
+                type: "tuple[]",
+                components: [
+                    { name: "success", type: "bool" },
+                    { name: "returnData", type: "bytes" },
+                ],
+            },
+        ],
+    },
+] as const
+
+// 呼び出しを順に実行し、1つでも失敗すれば全体を revert させる。
+export function encodeAggregate(calls: { target: Address; callData: Hex }[]): Hex {
+    return encodeFunctionData({
+        abi: MULTICALL3_ABI,
+        functionName: "aggregate3",
+        args: [calls.map((call) => ({ ...call, allowFailure: false }))],
     })
 }
 

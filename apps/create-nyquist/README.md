@@ -15,22 +15,22 @@ One command that gives your autonomous agent its own Ethereum wallet and adds ny
 
 ## English
 
-> **Important:** nyquist runs on the Sepolia testnet only. Do not send mainnet ETH to a nyquist Safe. It is early-stage software, and the options may change.
+> **Important:** nyquist runs on Ethereum mainnet and the Sepolia testnet. It is early-stage software, and the options may change. Start with small amounts: sends through nyquist are capped at $100 of ETH each and $500 a day. On mainnet, nyquist adds a 5% fee to the gas refund.
 
 ### Quick start
 
-1. On the machine where your agent runs, start it and choose your agent.
+1. On the machine where your agent runs, start it and choose a network and your agent.
 
 ```sh
 npm create nyquist
 ```
 
 2. It creates the keys on this machine, registers the wallet with nyquist, shows the Safe address, and adds nyquist-mcp to your agent's MCP settings.
-3. Send Sepolia ETH to the Safe, at least 0.002 ETH for creating it plus what you want to send, and start a new session of your agent.
+3. Send ETH to the Safe on the same network, at least what you want to send plus gas, and start a new session of your agent. On Sepolia, also add 0.002 ETH for creating the Safe. On mainnet, the first send creates the Safe and its gas is part of that send's refund.
 
-If it ends with `Added nyquist to …`, your agent has the wallet. When it cannot find your agent's CLI or config file, it prints what to add by hand instead.
+If it ends with `Added nyquist-mainnet to …` (mainnet) or `Added nyquist to …` (Sepolia), your agent has the wallet. When it cannot find your agent's CLI or config file, it prints what to add by hand instead.
 
-> **Tip:** Running it again is safe. It reuses the keys in `~/.nyquist`, returns the same Safe, and never overwrites an existing `nyquist` entry.
+> **Tip:** Running it again is safe. It reuses the keys in `~/.nyquist`, returns the same Safe, and never overwrites an existing entry. Each network has its own keys and its own entry, so you can add both.
 
 Try asking your agent:
 
@@ -61,6 +61,8 @@ It registers `nyquist-mcp` at the exact version it was built with, not `latest`.
 <summary>Supported agents</summary>
 <br>
 
+The server is named `nyquist-mainnet` on mainnet and `nyquist` on Sepolia. The table uses `nyquist`.
+
 | Agent | How it is added |
 | --- | --- |
 | Claude Code | `claude mcp add nyquist --scope user` |
@@ -77,8 +79,8 @@ It registers `nyquist-mcp` at the exact version it was built with, not `latest`.
 
 | Option | Purpose |
 | --- | --- |
+| `--network <name>` | `mainnet` or `sepolia`. Asks when omitted |
 | `--agent <id>` | `claude-code`, `hermes`, `openclaw`, `grok`, or `other`. Asks when omitted |
-| `--enrollment <token>` | Joins an organization with an enrollment token issued by its account |
 
 Environment variables `NYQUIST_ENV`, `NYQUIST_API_URL`, `NYQUIST_RPC_URL`, `NYQUIST_HOME`, and `NYQUIST_MAX_FEE_WEI` are passed on to nyquist-mcp when set.
 
@@ -88,22 +90,22 @@ Environment variables `NYQUIST_ENV`, `NYQUIST_API_URL`, `NYQUIST_RPC_URL`, `NYQU
 
 ## 日本語
 
-> **重要**：nyquist は Sepolia テストネットでだけ動きます。nyquist の Safe にメインネットの ETH を送らないでください。早期段階のソフトウェアなので、オプションは変わることがあります。
+> **重要**：nyquist は Ethereum のメインネットと Sepolia テストネットで動きます。早期段階のソフトウェアなので、オプションは変わることがあります。少額から使ってください。nyquist を通る送金は、ETH で1回 $100、1日 $500 までです。メインネットでは、ガス代の払い戻しに nyquist の手数料 5% を上乗せします。
 
 ### クイックスタート
 
-1. エージェントが動いている端末で実行し、エージェントを選びます。
+1. エージェントが動いている端末で実行し、ネットワークとエージェントを選びます。
 
 ```sh
 npm create nyquist
 ```
 
 2. この端末で鍵を作り、nyquist にウォレットを登録して Safe のアドレスを表示し、エージェントの MCP 設定に nyquist-mcp を加えます。
-3. Safe に Sepolia の ETH を送り、エージェントを新しく立ち上げます。作成費用の 0.002 ETH と、送りたい額を合わせた額以上を入れてください。
+3. 同じネットワークで Safe に ETH を送り、エージェントを新しく立ち上げます。送りたい額とガス代を合わせた額以上を入れてください。Sepolia では、作成費用の 0.002 ETH も足してください。メインネットでは、最初の送金で Safe を作り、そのガス代も送金の払い戻しに含めます。
 
-最後に `Added nyquist to …` と出れば、エージェントがウォレットを持っています。エージェントの CLI や設定ファイルが見つからないときは、代わりに手で加える内容を表示します。
+最後に `Added nyquist-mainnet to …`（メインネット）か `Added nyquist to …`（Sepolia）と出れば、エージェントがウォレットを持っています。エージェントの CLI や設定ファイルが見つからないときは、代わりに手で加える内容を表示します。
 
-> **ヒント**：何度実行しても大丈夫です。`~/.nyquist` の鍵を使い回して同じ Safe を返し、すでにある `nyquist` の設定は上書きしません。
+> **ヒント**：何度実行しても大丈夫です。`~/.nyquist` の鍵を使い回して同じ Safe を返し、すでにある設定は上書きしません。鍵と設定はネットワークごとに別なので、両方を加えられます。
 
 エージェントに次のように頼んでみてください。
 
@@ -134,6 +136,8 @@ npm create nyquist
 <summary>対応するエージェント</summary>
 <br>
 
+サーバーの名前は、メインネットでは `nyquist-mainnet`、Sepolia では `nyquist` です。表では `nyquist` と書いています。
+
 | エージェント | 加え方 |
 | --- | --- |
 | Claude Code | `claude mcp add nyquist --scope user` |
@@ -150,8 +154,8 @@ npm create nyquist
 
 | オプション | 役割 |
 | --- | --- |
+| `--network <name>` | `mainnet` か `sepolia`。省略すると選択肢を出します |
 | `--agent <id>` | `claude-code`、`hermes`、`openclaw`、`grok`、`other` のいずれか。省略すると選択肢を出します |
-| `--enrollment <token>` | 組織のアカウントが発行した登録トークンで、その組織に属します |
 
 環境変数 `NYQUIST_ENV`、`NYQUIST_API_URL`、`NYQUIST_RPC_URL`、`NYQUIST_HOME`、`NYQUIST_MAX_FEE_WEI` を指定して実行すると、同じ値を nyquist-mcp にも渡します。
 

@@ -1,6 +1,6 @@
 {
   "name": "nyquist-mcp",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "MCP server that gives an autonomous agent its own Ethereum wallet. The keys stay on the agent's machine.",
   "keywords": [
     "mcp",

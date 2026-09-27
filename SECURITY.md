@@ -13,7 +13,7 @@ Include what you found, how to reproduce it, and what an attacker could do with 
 - The packages in this repository: `nyquist-mcp`, `create-nyquist`, and the libraries they bundle from `packages/`.
 - The nyquist API and relayer, which run outside this repository. Report issues with them the same way.
 
-nyquist currently runs on the Sepolia testnet only.
+nyquist runs on Ethereum mainnet and the Sepolia testnet.
 
 ---
 
@@ -32,4 +32,4 @@ nyquist はウォレットの鍵を扱うので、脆弱性の報告を重く受
 - このリポジトリのパッケージ（`nyquist-mcp` と `create-nyquist`）と、それらが `packages/` から同梱しているライブラリ
 - このリポジトリの外で動いている nyquist の API とリレイヤー。こちらも同じ方法で報告してください
 
-nyquist は、今は Sepolia テストネットだけで動いています。
+nyquist は、Ethereum のメインネットと Sepolia テストネットで動いています。

@@ -13,7 +13,7 @@ import {
     SAFE_ABI,
     calldataFloorGas,
     calldataGas,
-    encodeAddOwner,
+    encodeCreateProxy,
     encodeExecTransaction,
     encodeSetup,
     predictSafeAddress,
@@ -31,13 +31,12 @@ const CHAIN_BASE = { nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 1
 
 export type Agent = {
     id: string
-    accountId: string | null
+    // revert が続いて nyquist が中継を止めている間は suspended。
     status: "active" | "suspended"
     signer: Address
     safe: Address
     owners: Address[]
     threshold: number
-    recoveryOwner: Address | null
     deployed: boolean
     balanceWei: string
     nonce: string
@@ -64,7 +63,6 @@ export type TransactionResult = { hash: Hex; safeTxHash: Hex; status: "pending" 
 // サーバーの応答は、形を確かめてから使う。形の違う値や余計な項目を、そのままエージェントに渡さない。
 const HASH = /^0x[0-9a-fA-F]{64}$/
 const DECIMAL = /^(0|[1-9][0-9]{0,77})$/
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 const STATUSES = ["pending", "success", "failed", "reverted", "dropped"] as const
 
 function malformed(): never {
@@ -90,19 +88,16 @@ function parseAgent(json: unknown): Agent {
     if (typeof json !== "object" || json === null) malformed()
     const value = json as Record<string, unknown>
     if (typeof value.id !== "string" || !/^[A-Za-z0-9_-]{43}$/.test(value.id)) malformed()
-    if (value.accountId !== null && (typeof value.accountId !== "string" || !UUID.test(value.accountId))) malformed()
     if (value.status !== "active" && value.status !== "suspended") malformed()
     if (!Array.isArray(value.owners) || typeof value.threshold !== "number" || !Number.isInteger(value.threshold)) malformed()
     if (typeof value.deployed !== "boolean" || typeof value.createdAt !== "string") malformed()
     return {
         id: value.id,
-        accountId: value.accountId,
         status: value.status,
         signer: address(value.signer),
         safe: address(value.safe),
         owners: value.owners.map(address),
         threshold: value.threshold,
-        recoveryOwner: value.recoveryOwner === null ? null : address(value.recoveryOwner),
         deployed: value.deployed,
         balanceWei: decimal(value.balanceWei),
         nonce: decimal(value.nonce),
@@ -197,11 +192,15 @@ export class Wallet {
     // Safe の作成費用はリレイヤーに払うので、そのアドレスと額も初期化の内容に入る。
     #expectedSafe(keys: Keys): Address {
         const { config } = this.#settings
-        const initializer = encodeSetup([keys.signer.address], 1, config.safe.fallbackHandler, {
+        return predictSafeAddress(config.safe.proxyFactory, config.safe.singleton, this.#initializer(keys), saltNonce(keys.agentId))
+    }
+
+    #initializer(keys: Keys): Hex {
+        const { config } = this.#settings
+        return encodeSetup([keys.signer.address], 1, config.safe.fallbackHandler, {
             amount: BigInt(config.relayer.deploymentFeeWei),
             receiver: config.relayerAddress,
         })
-        return predictSafeAddress(config.safe.proxyFactory, config.safe.singleton, initializer, saltNonce(keys.agentId))
     }
 
     async #keys(): Promise<Keys> {
@@ -211,7 +210,7 @@ export class Wallet {
     }
 
     // 鍵がなければ作り、未登録なら登録する。何度呼んでも同じウォレットを返す。
-    async setup(enrollment?: string): Promise<{ agent: Agent; created: boolean }> {
+    async setup(): Promise<{ agent: Agent; created: boolean }> {
         const { keys, created } = await this.#keystore.loadOrCreate()
         const expected = this.#expectedSafe(keys)
         if (keys.registration) {
@@ -226,7 +225,7 @@ export class Wallet {
                 await this.#request<unknown>(keys, "POST", "/api/v1/agent", {
                     publicKey: keys.publicKey,
                     signer: keys.signer.address,
-                    ...(enrollment ? { enrollment } : {}),
+                    ...(this.#settings.invite ? { invite: this.#settings.invite } : {}),
                 }),
             )
         } catch (error) {
@@ -254,10 +253,6 @@ export class Wallet {
         return parseAgent(await this.#request<unknown>(keys, "GET", "/api/v1/agent"))
     }
 
-    async claim(): Promise<{ code: string; expiresAt: string }> {
-        return this.#request(await this.#keys(), "POST", "/api/v1/agent/claim")
-    }
-
     async transaction(hash: Hex): Promise<TransactionResult> {
         return parseTransaction(await this.#request<unknown>(await this.#keys(), "GET", `/api/v1/transaction/${hash}`))
     }
@@ -279,7 +274,7 @@ export class Wallet {
             value: call.value.toString(),
             data: call.data,
         }))
-        const tx = await this.#verify(quote, safe, call)
+        const tx = await this.#verify(quote, keys, call)
         const signature = await keys.signer.signTypedData(safeTypedData(this.#settings.config.chain.id, safe, tx))
         const result = parseTransaction(await this.#request<unknown>(keys, "POST", "/api/v1/transaction", {
             to: tx.to,
@@ -299,26 +294,6 @@ export class Wallet {
         }
     }
 
-    // 引き取ったアカウントの owner を、Safe の復旧用オーナーに加える。
-    // 加える相手は、人間から直接受け取ったアドレス（expected）で決める。サーバーの申告だけで決めると、
-    // 乗っ取られたサーバーが自分のアドレスを返して Safe のオーナーに入り込める。
-    async addRecoveryOwner(expected: Address): Promise<TransactionResult & { owner: Address }> {
-        const keys = await this.#keys()
-        const safe = keys.registration!.safe
-        const owner = getAddress(expected)
-        const agent = await this.info()
-        if (!agent.recoveryOwner || !isAddressEqual(agent.recoveryOwner, owner)) {
-            throw new WalletError("人間から受け取ったアドレスが、nyquist に登録された復旧用オーナーと一致しません")
-        }
-        const owners = await this.#owners(safe)
-        if (owners.some((address) => isAddressEqual(address, owner))) {
-            throw new WalletError(`${owner} はすでに Safe のオーナーです`)
-        }
-        const result = await this.#send(keys, { to: safe, value: 0n, data: encodeAddOwner(owner, 1) })
-        return { ...result, owner }
-    }
-
-    // Safe のオーナーをチェーンから読む。作成前は自分の signer だけ。
     // Safe のオーナーと閾値をチェーンから読む。サーバーの申告は使わない。作成前は自分の signer だけ。
     // サーバーの申告をそのままエージェントに見せると、乗っ取られたサーバーが攻撃者のアドレスを混ぜられる。
     async onchain(): Promise<{ safe: Address; owners: Address[]; threshold: number; deployed: boolean }> {
@@ -334,16 +309,10 @@ export class Wallet {
         return { safe, owners: owners.map((owner) => getAddress(owner)), threshold: Number(threshold), deployed: true }
     }
 
-    async #owners(safe: Address): Promise<readonly Address[]> {
-        const client = this.#client()
-        const code = await client.getCode({ address: safe })
-        if (code === undefined || code === "0x") return []
-        return client.readContract({ address: safe, abi: SAFE_ABI, functionName: "getOwners" })
-    }
-
     // サーバーを信じきらず、署名する内容を手元で組み立てて確かめる。
-    async #verify(quote: Quote, safe: Address, call: Call): Promise<SafeTransaction> {
+    async #verify(quote: Quote, keys: Keys, call: Call): Promise<SafeTransaction> {
         const { config, maxFeeWei } = this.#settings
+        const safe = keys.registration!.safe
         if (quote.chainId !== config.chain.id) throw new QuoteRejected(`chainId が ${config.chain.id} ではありません`)
         if (!isAddressEqual(quote.safe, safe)) throw new QuoteRejected("見積もりの Safe が登録時の Safe と違います")
         if (!isAddressEqual(quote.gasToken, zeroAddress)) throw new QuoteRejected("ガス代は ETH 以外で払えません")
@@ -368,18 +337,6 @@ export class Wallet {
             throw new QuoteRejected("SafeTx のハッシュが手元の計算と一致しません")
         }
 
-        // baseGas と safeTxGas が、nyquist の公開している計算式の範囲に収まっているか。
-        // calldata の多い tx は EIP-7623 の下限で払うので、その場合は下限を基準にする。
-        const calldata = encodeExecTransaction({ ...tx, safeTxGas: 0n, baseGas: 0n, gasPrice: 0n }, `0x${"ff".repeat(65)}`)
-        const intrinsic = 21_000n + calldataGas(calldata)
-        const floor = calldataFloorGas(calldata)
-        const overhead = BigInt(config.relayer.baseGasOverhead) + BigInt(config.relayer.firstExecutionGas)
-        const gasLimit = (intrinsic > floor ? intrinsic : floor) + overhead * 2n
-        // リレイヤーの手数料は、公開している割合（relayer.feeBps）までしか受け付けない。
-        const feeLimit = ((tx.safeTxGas + gasLimit) * BigInt(config.relayer.feeBps)) / 10_000n
-        if (BigInt(quote.feeGas) > feeLimit) throw new QuoteRejected("手数料が公開している割合を超えています")
-        const baseGasLimit = gasLimit + feeLimit
-        if (tx.baseGas > baseGasLimit) throw new QuoteRejected(`baseGas が大きすぎます。上限は ${baseGasLimit} です`)
         if (tx.safeTxGas > BigInt(config.relayer.gasLimitCap)) throw new QuoteRejected("safeTxGas が大きすぎます")
 
         const client = this.#client()
@@ -399,6 +356,36 @@ export class Wallet {
             throw new QuoteRejected("Safe から呼び出すと revert します。宛先、金額、Safe の残高を確認してください")
         }
         if (tx.safeTxGas < needed) throw new QuoteRejected(`safeTxGas が小さすぎます。${needed} 以上が必要です`)
+        // 大きすぎる safeTxGas は、それに掛かる手数料を膨らませる。サーバーは見積もりの 1.3 倍にするので、
+        // 手元の見積もりの 2 倍まで受け付ける。Safe を作る前は、公開している下限（undeployedSafeTxGas）まで受け付ける。
+        const undeployed = deployed ? 0n : BigInt(config.relayer.undeployedSafeTxGas)
+        const safeTxGasLimit = needed * 2n > undeployed ? needed * 2n : undeployed
+        if (tx.safeTxGas > safeTxGasLimit) throw new QuoteRejected(`safeTxGas が大きすぎます。上限は ${safeTxGasLimit} です`)
+
+        // 作成費用を 0 にしている環境では、Safe の作成を最初の送金とまとめ、作成のガスも baseGas で払い戻す。
+        // その分は、自分でも作成を見積もり、2割の余裕までを認める。
+        let deploymentGas = 0n
+        if (!deployed && BigInt(config.relayer.deploymentFeeWei) === 0n) {
+            const estimated = await client.estimateGas({
+                account: config.relayerAddress,
+                to: config.safe.proxyFactory,
+                data: encodeCreateProxy(config.safe.singleton, this.#initializer(keys), saltNonce(keys.agentId)),
+            })
+            deploymentGas = (estimated * 12n) / 10n
+        }
+
+        // baseGas と手数料が、nyquist の公開している計算式の範囲に収まっているか。
+        // calldata の多い tx は EIP-7623 の下限で払うので、その場合は下限を基準にする。
+        const calldata = encodeExecTransaction({ ...tx, safeTxGas: 0n, baseGas: 0n, gasPrice: 0n }, `0x${"ff".repeat(65)}`)
+        const intrinsic = 21_000n + calldataGas(calldata)
+        const floor = calldataFloorGas(calldata)
+        const overhead = BigInt(config.relayer.baseGasOverhead) + BigInt(config.relayer.firstExecutionGas)
+        const gasLimit = (intrinsic > floor ? intrinsic : floor) + overhead * 2n + deploymentGas
+        // リレイヤーの手数料は、公開している割合（relayer.feeBps）までしか受け付けない。
+        const feeLimit = ((tx.safeTxGas + gasLimit) * BigInt(config.relayer.feeBps)) / 10_000n
+        if (BigInt(quote.feeGas) > feeLimit) throw new QuoteRejected("手数料が公開している割合を超えています")
+        const baseGasLimit = gasLimit + feeLimit
+        if (tx.baseGas > baseGasLimit) throw new QuoteRejected(`baseGas が大きすぎます。上限は ${baseGasLimit} です`)
 
         // gasPrice を、自分で取得した現在のガス代と比べる。
         const { maxFeePerGas } = await client.estimateFeesPerGas()

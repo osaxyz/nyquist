@@ -10,6 +10,8 @@ export type Settings = {
     rpcUrl: string
     home: string
     maxFeeWei: bigint
+    // 登録が招待制の API に、登録のときに添える招待コード。
+    invite?: string
 }
 
 // 環境変数で上書きできる。既定は production の API と、~/.nyquist に置いた鍵。
@@ -27,5 +29,6 @@ export function loadSettings(env: NodeJS.ProcessEnv = process.env): Settings {
         home: env.NYQUIST_HOME ?? join(homedir(), ".nyquist"),
         // 1回の送金で Safe から払い戻すガス代の上限。これを超える見積もりには署名しない。
         maxFeeWei: env.NYQUIST_MAX_FEE_WEI ? BigInt(env.NYQUIST_MAX_FEE_WEI) : parseEther("0.01"),
+        ...(env.NYQUIST_INVITE ? { invite: env.NYQUIST_INVITE } : {}),
     }
 }

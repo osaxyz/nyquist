@@ -21,21 +21,21 @@ A crypto wallet for autonomous agents. Each agent owns a Safe on Ethereum and se
 </p>
 
 > [!IMPORTANT]
-> nyquist runs on the Sepolia testnet only. Do not send mainnet ETH to a nyquist Safe. It is early-stage software, and the API and the MCP tools may change.
+> nyquist runs on Ethereum mainnet and the Sepolia testnet. It is early-stage software, and the API and the MCP tools may change. Start with small amounts: sends through nyquist are capped at $100 of ETH each and $500 a day.
 
 ### Quick start
 
-1. On the machine where your agent runs, create the wallet and register it with your agent. Choose Claude Code, Hermes Agent, OpenClaw, Grok Bot, or another MCP client.
+1. On the machine where your agent runs, create the wallet and register it with your agent. Choose a network, then Claude Code, Hermes Agent, OpenClaw, Grok Bot, or another MCP client.
 
 ```sh
 npm create nyquist
 ```
 
-2. Send Sepolia ETH to the Safe address it shows. The first send creates the Safe, so fund at least 0.002 ETH for that plus what you want to send.
-3. Start a new session of your agent. In Claude Code, check that the server is connected.
+2. Send ETH to the Safe address it shows, on the same network: what you want to send, plus gas. The first send also creates the Safe. On Sepolia, add 0.002 ETH for that.
+3. Start a new session of your agent. In Claude Code, check that the server is connected. It is `nyquist-mainnet` on mainnet and `nyquist` on Sepolia.
 
 ```sh
-claude mcp get nyquist
+claude mcp get nyquist-mainnet
 ```
 
 If it shows `Status: ✔ Connected`, your agent can use the wallet.
@@ -69,7 +69,7 @@ The Safe has one owner, the agent's key, with a threshold of 1. nyquist runs a r
 <summary>Agents sign up without a human</summary>
 <br>
 
-Every API request carries an RFC 9421 HTTP Message Signature made with the agent's Ed25519 key. The key's RFC 7638 thumbprint is the agent's ID, so there are no accounts, passwords, or OAuth flows to set up. A human can later claim an agent into an organization with Sign-In with Ethereum.
+Every API request carries an RFC 9421 HTTP Message Signature made with the agent's Ed25519 key. The key's RFC 7638 thumbprint is the agent's ID, so there are no accounts, passwords, or OAuth flows to set up.
 
 </details>
 
@@ -77,7 +77,7 @@ Every API request carries an RFC 9421 HTTP Message Signature made with the agent
 <summary>Gas is paid up front and refunded by the Safe</summary>
 <br>
 
-The relayer submits each transaction and is refunded by the Safe's built-in payment, in the same transaction, for the gas it actually used. The agent never needs a separate gas balance. The first send also creates the Safe and pays a fixed 0.002 ETH creation fee from it.
+The relayer submits each transaction and is refunded by the Safe's built-in payment, in the same transaction, for the gas it actually used. The agent never needs a separate gas balance. The first send also creates the Safe. On mainnet, that happens in the same transaction and its gas is part of the refund, so it costs what gas costs at that moment. On Sepolia, the Safe pays a fixed 0.002 ETH creation fee. On mainnet, nyquist adds a 5% fee to the refund; the amount sent is never touched.
 
 </details>
 
@@ -106,11 +106,9 @@ Before signing, the agent checks the server's answers on its own machine and sto
 | Tool | Purpose |
 | --- | --- |
 | `nyquist_setup` | Creates the keys and registers the wallet. Returns the same wallet every time |
-| `nyquist_wallet` | Returns the Safe address, balance, owners, and organization |
+| `nyquist_wallet` | Returns the Safe address, balance, owners, and whether nyquist is relaying |
 | `nyquist_send` | Sends ETH or calls a contract. The first send creates the Safe |
 | `nyquist_transaction` | Returns the status of a send |
-| `nyquist_claim_code` | Creates a code a human uses to claim the agent into an organization |
-| `nyquist_add_recovery_owner` | Adds the human who claimed the agent as a recovery owner of the Safe |
 
 </details>
 
@@ -129,12 +127,16 @@ Before signing, the agent checks the server's answers on its own machine and sto
 <summary>Network and contracts</summary>
 <br>
 
-| Item | Value |
-| --- | --- |
-| Chain | Sepolia (chain ID 11155111) |
-| Safe | v1.4.1, singleton `0x41675C099F32341bf84BFc5382aF534df5C7461a` |
-| Relayer | `0x2d7A951dbDFeA17E2c3EecA87cFde15a205c1174` |
-| API | [OpenAPI document](https://nyquist-api-production.original-sin-architecture.workers.dev/api/v1/openapi.json) |
+| Item | Ethereum mainnet | Sepolia testnet |
+| --- | --- | --- |
+| Chain ID | 1 | 11155111 |
+| `NYQUIST_ENV` | `mainnet` | `production` (default) |
+| Relayer | `0xF6389d891c5761fE74DC3474272eA7C52A9ae5F2` | `0x2d7A951dbDFeA17E2c3EecA87cFde15a205c1174` |
+| nyquist's fee | 5% of the gas refund | None |
+| Send limits | $100 of ETH per send, $500 a day | Same |
+| API | [OpenAPI document](https://nyquist-api-mainnet.original-sin-architecture.workers.dev/api/v1/openapi.json) | [OpenAPI document](https://nyquist-api-production.original-sin-architecture.workers.dev/api/v1/openapi.json) |
+
+Both use Safe v1.4.1, singleton `0x41675C099F32341bf84BFc5382aF534df5C7461a`. The limits count the ETH a send moves, priced with Chainlink's ETH/USD feed; token transfers are not counted.
 
 </details>
 
@@ -148,21 +150,21 @@ Before signing, the agent checks the server's answers on its own machine and sto
 </p>
 
 > [!IMPORTANT]
-> nyquist は Sepolia テストネットでだけ動きます。nyquist の Safe にメインネットの ETH を送らないでください。早期段階のソフトウェアなので、API と MCP のツールは変わることがあります。
+> nyquist は Ethereum のメインネットと Sepolia テストネットで動きます。早期段階のソフトウェアなので、API と MCP のツールは変わることがあります。少額から使ってください。nyquist を通る送金は、ETH で1回 $100、1日 $500 までです。
 
 ### クイックスタート
 
-1. エージェントが動いている端末で、ウォレットを作ってエージェントに登録します。Claude Code、Hermes Agent、OpenClaw、Grok Bot、その他の MCP クライアントから選びます。
+1. エージェントが動いている端末で、ウォレットを作ってエージェントに登録します。ネットワークを選び、Claude Code、Hermes Agent、OpenClaw、Grok Bot、その他の MCP クライアントから選びます。
 
 ```sh
 npm create nyquist
 ```
 
-2. 表示された Safe のアドレスに Sepolia の ETH を送ります。最初の送金で Safe が作られるので、その費用の 0.002 ETH と、送りたい額を合わせた額以上を入れてください。
-3. エージェントを新しく立ち上げます。Claude Code なら、接続できているかを確かめます。
+2. 同じネットワークで、表示された Safe のアドレスに ETH を送ります。送りたい額とガス代を合わせた額以上を入れてください。最初の送金で Safe も作ります。Sepolia では、その費用の 0.002 ETH も足してください。
+3. エージェントを新しく立ち上げます。Claude Code なら、接続できているかを確かめます。名前は、メインネットでは `nyquist-mainnet`、Sepolia では `nyquist` です。
 
 ```sh
-claude mcp get nyquist
+claude mcp get nyquist-mainnet
 ```
 
 `Status: ✔ Connected` と出れば、エージェントがウォレットを使えます。
@@ -196,7 +198,7 @@ Safe のオーナーはエージェントの鍵1つだけで、閾値は1です�
 <summary>人間を介さずに登録できます</summary>
 <br>
 
-API へのリクエストには、エージェントの Ed25519 の鍵で RFC 9421 の HTTP Message Signature を付けます。鍵の RFC 7638 のサムプリントがエージェントの ID になるので、アカウント、パスワード、OAuth の設定はありません。あとから人間が Sign-In with Ethereum で、エージェントを組織に引き取れます。
+API へのリクエストには、エージェントの Ed25519 の鍵で RFC 9421 の HTTP Message Signature を付けます。鍵の RFC 7638 のサムプリントがエージェントの ID になるので、アカウント、パスワード、OAuth の設定はありません。
 
 </details>
 
@@ -204,7 +206,7 @@ API へのリクエストには、エージェントの Ed25519 の鍵で RFC 94
 <summary>ガス代は立て替えて、Safe から払い戻します</summary>
 <br>
 
-リレイヤーが tx を送り、実際に使ったガスの分を、同じ tx の中で Safe の払い戻しの仕組みで受け取ります。エージェントがガス代を別に持つ必要はありません。最初の送金では Safe も作り、決まった作成費用 0.002 ETH を Safe から払います。
+リレイヤーが tx を送り、実際に使ったガスの分を、同じ tx の中で Safe の払い戻しの仕組みで受け取ります。エージェントがガス代を別に持つ必要はありません。最初の送金では Safe も作ります。メインネットでは同じ tx の中で作り、そのガス代も払い戻しに含めるので、そのときのガス代だけで済みます。Sepolia では、決まった作成費用 0.002 ETH を Safe から払います。メインネットでは、払い戻しに nyquist の手数料 5% を上乗せします。送る額には手を付けません。
 
 </details>
 
@@ -233,11 +235,9 @@ API へのリクエストには、エージェントの Ed25519 の鍵で RFC 94
 | ツール | 役割 |
 | --- | --- |
 | `nyquist_setup` | 鍵を作り、ウォレットを登録します。何度呼んでも同じウォレットを返します |
-| `nyquist_wallet` | Safe のアドレス、残高、オーナー、所属する組織を返します |
+| `nyquist_wallet` | Safe のアドレス、残高、オーナー、nyquist が中継しているかを返します |
 | `nyquist_send` | ETH を送るか、コントラクトを呼びます。最初の送金で Safe を作ります |
 | `nyquist_transaction` | 送金の状態を返します |
-| `nyquist_claim_code` | 人間がエージェントを組織に引き取るためのコードを作ります |
-| `nyquist_add_recovery_owner` | 引き取った人間を、Safe の復旧用オーナーに加えます |
 
 </details>
 
@@ -256,11 +256,15 @@ API へのリクエストには、エージェントの Ed25519 の鍵で RFC 94
 <summary>ネットワークとコントラクト</summary>
 <br>
 
-| 項目 | 値 |
-| --- | --- |
-| チェーン | Sepolia（chain ID 11155111） |
-| Safe | v1.4.1。singleton は `0x41675C099F32341bf84BFc5382aF534df5C7461a` |
-| リレイヤー | `0x2d7A951dbDFeA17E2c3EecA87cFde15a205c1174` |
-| API | [OpenAPI の文書](https://nyquist-api-production.original-sin-architecture.workers.dev/api/v1/openapi.json) |
+| 項目 | Ethereum メインネット | Sepolia テストネット |
+| --- | --- | --- |
+| chain ID | 1 | 11155111 |
+| `NYQUIST_ENV` | `mainnet` | `production`（既定） |
+| リレイヤー | `0xF6389d891c5761fE74DC3474272eA7C52A9ae5F2` | `0x2d7A951dbDFeA17E2c3EecA87cFde15a205c1174` |
+| nyquist の手数料 | ガス代の払い戻しの 5% | なし |
+| 送金の上限 | ETH で1回 $100、1日 $500 | 同じ |
+| API | [OpenAPI の文書](https://nyquist-api-mainnet.original-sin-architecture.workers.dev/api/v1/openapi.json) | [OpenAPI の文書](https://nyquist-api-production.original-sin-architecture.workers.dev/api/v1/openapi.json) |
+
+どちらも Safe v1.4.1 で、singleton は `0x41675C099F32341bf84BFc5382aF534df5C7461a` です。上限は、送金で動く ETH を Chainlink の ETH/USD で換算して数えます。トークンの送金は数えません。
 
 </details>

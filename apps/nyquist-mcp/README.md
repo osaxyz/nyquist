@@ -15,18 +15,20 @@ An MCP server that gives an autonomous agent its own Ethereum wallet. The keys s
 
 ## English
 
-> **Important:** nyquist runs on the Sepolia testnet only. Do not send mainnet ETH to a nyquist Safe. It is early-stage software, and the tools may change.
+> **Important:** nyquist runs on Ethereum mainnet and the Sepolia testnet. It is early-stage software, and the tools may change. Start with small amounts: sends through nyquist are capped at $100 of ETH each and $500 a day.
 
 ### Quick start
 
-1. Run `npm create nyquist`. It creates the keys, registers the wallet, and adds this server to your agent. To add it by hand instead, register it as a stdio MCP server. In Claude Code:
+1. Run `npm create nyquist` and choose a network. It creates the keys, registers the wallet, and adds this server to your agent. To add it by hand instead, register it as a stdio MCP server. In Claude Code, for mainnet:
 
 ```sh
-claude mcp add nyquist --scope user -- npx --prefix="$HOME/.nyquist" -y --package nyquist-mcp@0.1.1 nyquist-mcp
+claude mcp add nyquist-mainnet --scope user -e NYQUIST_ENV=mainnet -- npx --prefix="$HOME/.nyquist" -y --package nyquist-mcp@0.2.0 nyquist-mcp
 ```
 
+Leave out `-e NYQUIST_ENV=mainnet` to use Sepolia.
+
 2. Ask your agent to set up the wallet. It calls `nyquist_setup` and returns the Safe address.
-3. Send Sepolia ETH to that address, at least 0.002 ETH for creating the Safe plus what you want to send.
+3. Send ETH to that address on the same network: what you want to send, plus gas. On Sepolia, also add 0.002 ETH for creating the Safe.
 
 > **Tip:** The version is pinned, so a new release never runs on your agent until you change it. `--prefix` starts npx from `~/.nyquist` instead of your project. Without it, npx refuses to run inside a project whose `package.json` requires another package manager through `devEngines`.
 
@@ -34,7 +36,6 @@ Try asking:
 
 - "Set up my nyquist wallet."
 - "Send 0.001 ETH to 0x…"
-- "Create a claim code so I can take over this agent."
 
 ### Technology
 
@@ -49,7 +50,7 @@ The Safe has one owner, the agent's secp256k1 key, with a threshold of 1. nyquis
 | Ed25519 | Signs API requests with RFC 9421 HTTP Message Signatures |
 | secp256k1 | Signs Safe transactions as the sole owner |
 
-The keys are stored in `~/.nyquist/agent.<environment>.json`, with mode 0600 in a 0700 directory. Losing the secp256k1 key means losing the funds, so keep the balance small until a human has claimed the agent and been added with `nyquist_add_recovery_owner`.
+The keys are stored in `~/.nyquist/agent.<environment>.json`, with mode 0600 in a 0700 directory. Each network has its own keys, so a Sepolia key can never move mainnet funds. Losing the secp256k1 key means losing the funds. Back up the key file and keep the balance small.
 
 </details>
 
@@ -69,11 +70,27 @@ The keys are stored in `~/.nyquist/agent.<environment>.json`, with mode 0600 in 
 | Gas price | No more than three times the current fee from the agent's own RPC |
 | Refund | Paid only to the published relayer, and no more than `NYQUIST_MAX_FEE_WEI` |
 
-Calls to the Safe itself are refused, except for adding a recovery owner. Error text from the server is replaced with fixed local messages before it reaches the model.
+Calls to the Safe itself are refused. Error text from the server is replaced with fixed local messages before it reaches the model.
 
 </details>
 
 ### Specification
+
+<details>
+<summary>Networks and fees</summary>
+<br>
+
+| | Ethereum mainnet | Sepolia testnet |
+| --- | --- | --- |
+| `NYQUIST_ENV` | `mainnet` | `production` (default) |
+| nyquist's fee | 5% of the gas refund | None |
+| Creating the Safe | Done in the same transaction as the first send; its gas is part of that refund | 0.002 ETH, paid once from the Safe |
+| Sending | Through Flashbots Protect, never the public mempool | Through the RPC |
+| Send limits | $100 of ETH per send, $500 a day | Same |
+
+The fee is added to the gas refund, not taken from the amount sent. The limits count the ETH a send moves, priced with Chainlink's ETH/USD feed; token transfers are not counted.
+
+</details>
 
 <details>
 <summary>MCP tools</summary>
@@ -82,11 +99,9 @@ Calls to the Safe itself are refused, except for adding a recovery owner. Error 
 | Tool | Purpose |
 | --- | --- |
 | `nyquist_setup` | Creates the keys and registers the wallet. Returns the same wallet every time |
-| `nyquist_wallet` | Returns the Safe address, balance, owners, and organization |
-| `nyquist_send` | Sends ETH or calls a contract. The first send creates the Safe and pays a 0.002 ETH creation fee |
+| `nyquist_wallet` | Returns the Safe address, balance, owners, and whether nyquist is relaying |
+| `nyquist_send` | Sends ETH or calls a contract. The first send also creates the Safe |
 | `nyquist_transaction` | Returns `pending`, `success`, `failed`, `reverted`, or `dropped` for a send. `dropped` means nyquist cancelled it before it ran |
-| `nyquist_claim_code` | Creates a code a human uses to claim the agent into an organization |
-| `nyquist_add_recovery_owner` | Adds the human who claimed the agent as a Safe owner. Takes the address the human gave you directly |
 
 </details>
 
@@ -96,9 +111,9 @@ Calls to the Safe itself are refused, except for adding a recovery owner. Error 
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `NYQUIST_ENV` | `production` | `development` uses a local API |
+| `NYQUIST_ENV` | `production` | `mainnet` for Ethereum mainnet, `production` for Sepolia, `development` for a local API |
 | `NYQUIST_API_URL` | The API for the environment | The nyquist API to use |
-| `NYQUIST_RPC_URL` | A public Sepolia RPC | The RPC used to check quotes |
+| `NYQUIST_RPC_URL` | A public RPC for the network | The RPC used to check quotes |
 | `NYQUIST_HOME` | `~/.nyquist` | Where the keys are stored |
 | `NYQUIST_MAX_FEE_WEI` | 0.01 ETH | The most gas refund a single send may pay |
 
@@ -108,18 +123,20 @@ Calls to the Safe itself are refused, except for adding a recovery owner. Error 
 
 ## 日本語
 
-> **重要**：nyquist は Sepolia テストネットでだけ動きます。nyquist の Safe にメインネットの ETH を送らないでください。早期段階のソフトウェアなので、ツールは変わることがあります。
+> **重要**：nyquist は Ethereum のメインネットと Sepolia テストネットで動きます。早期段階のソフトウェアなので、ツールは変わることがあります。少額から使ってください。nyquist を通る送金は、ETH で1回 $100、1日 $500 までです。
 
 ### クイックスタート
 
-1. `npm create nyquist` を実行します。鍵を作り、ウォレットを登録し、このサーバーをエージェントに加えます。手で加えるときは、stdio の MCP サーバーとして登録します。Claude Code なら次のとおりです。
+1. `npm create nyquist` を実行し、ネットワークを選びます。鍵を作り、ウォレットを登録し、このサーバーをエージェントに加えます。手で加えるときは、stdio の MCP サーバーとして登録します。Claude Code でメインネットを使うなら次のとおりです。
 
 ```sh
-claude mcp add nyquist --scope user -- npx --prefix="$HOME/.nyquist" -y --package nyquist-mcp@0.1.1 nyquist-mcp
+claude mcp add nyquist-mainnet --scope user -e NYQUIST_ENV=mainnet -- npx --prefix="$HOME/.nyquist" -y --package nyquist-mcp@0.2.0 nyquist-mcp
 ```
 
+Sepolia を使うときは、`-e NYQUIST_ENV=mainnet` を外します。
+
 2. エージェントにウォレットの用意を頼みます。`nyquist_setup` を呼んで、Safe のアドレスを返します。
-3. そのアドレスに Sepolia の ETH を送ります。Safe の作成費用の 0.002 ETH と、送りたい額を合わせた額以上を入れてください。
+3. 同じネットワークで、そのアドレスに ETH を送ります。送りたい額とガス代を合わせた額以上を入れてください。Sepolia では、Safe の作成費用の 0.002 ETH も足してください。
 
 > **ヒント**：版を固定しているので、新しい版は、あなたが版を書き換えるまでエージェントの環境では動きません。`--prefix` は、npx をプロジェクトではなく `~/.nyquist` から起動するためのものです。これがないと、`package.json` の `devEngines` で別のパッケージマネージャーを指定したプロジェクトの中では、npx が起動を拒みます。
 
@@ -127,7 +144,6 @@ claude mcp add nyquist --scope user -- npx --prefix="$HOME/.nyquist" -y --packag
 
 - 「nyquist のウォレットを用意して」
 - 「0.001 ETH を 0x… に送って」
-- 「このエージェントを引き取れるよう、引き取りコードを作って」
 
 ### テクノロジー
 
@@ -142,7 +158,7 @@ Safe のオーナーはエージェントの secp256k1 の鍵1つだけで、閾
 | Ed25519 | API へのリクエストに RFC 9421 の HTTP Message Signature を付ける |
 | secp256k1 | 唯一のオーナーとして Safe の tx に署名する |
 
-鍵は `~/.nyquist/agent.<環境>.json` に、ファイルは 0600、ディレクトリは 0700 で保存します。secp256k1 の鍵を失うと資金も失うので、人間に引き取ってもらい、`nyquist_add_recovery_owner` で加えるまでは、少額で使ってください。
+鍵は `~/.nyquist/agent.<環境>.json` に、ファイルは 0600、ディレクトリは 0700 で保存します。鍵はネットワークごとに別なので、Sepolia の鍵でメインネットの資金は動きません。secp256k1 の鍵を失うと資金も失うので、鍵のファイルを控え、少額で使ってください。
 
 </details>
 
@@ -162,11 +178,27 @@ Safe のオーナーはエージェントの secp256k1 の鍵1つだけで、閾
 | ガス代 | 自分の RPC から取った現在のガス代の3倍を超えない |
 | 払い戻し | 公開しているリレイヤーにだけ払い、`NYQUIST_MAX_FEE_WEI` を超えない |
 
-Safe 自身への呼び出しは、復旧用オーナーを加えるもの以外は断ります。サーバーのエラーの文は、モデルに渡す前に手元で決めた文に置き換えます。
+Safe 自身への呼び出しは断ります。サーバーのエラーの文は、モデルに渡す前に手元で決めた文に置き換えます。
 
 </details>
 
 ### 仕様
+
+<details>
+<summary>ネットワークと手数料</summary>
+<br>
+
+| | Ethereum メインネット | Sepolia テストネット |
+| --- | --- | --- |
+| `NYQUIST_ENV` | `mainnet` | `production`（既定） |
+| nyquist の手数料 | ガス代の払い戻しの 5% | なし |
+| Safe の作成 | 最初の送金と同じ tx で作り、そのガス代も払い戻しに含める | 作成費用 0.002 ETH を、Safe から一度だけ払う |
+| 送信の経路 | Flashbots Protect。公開の mempool には出さない | RPC |
+| 送金の上限 | ETH で1回 $100、1日 $500 | 同じ |
+
+手数料は、送る額からではなく、ガス代の払い戻しに上乗せします。上限は、送金で動く ETH を Chainlink の ETH/USD で換算して数えます。トークンの送金は数えません。
+
+</details>
 
 <details>
 <summary>MCP ツール</summary>
@@ -175,11 +207,9 @@ Safe 自身への呼び出しは、復旧用オーナーを加えるもの以外
 | ツール | 役割 |
 | --- | --- |
 | `nyquist_setup` | 鍵を作り、ウォレットを登録します。何度呼んでも同じウォレットを返します |
-| `nyquist_wallet` | Safe のアドレス、残高、オーナー、所属する組織を返します |
-| `nyquist_send` | ETH を送るか、コントラクトを呼びます。最初の送金で Safe を作り、作成費用 0.002 ETH を払います |
+| `nyquist_wallet` | Safe のアドレス、残高、オーナー、nyquist が中継しているかを返します |
+| `nyquist_send` | ETH を送るか、コントラクトを呼びます。最初の送金で Safe も作ります |
 | `nyquist_transaction` | 送金の状態を `pending`、`success`、`failed`、`reverted`、`dropped` のどれかで返します。`dropped` は、実行される前に nyquist が取り消したことを表します |
-| `nyquist_claim_code` | 人間がエージェントを組織に引き取るためのコードを作ります |
-| `nyquist_add_recovery_owner` | 引き取った人間を Safe のオーナーに加えます。その人から直接教わったアドレスを渡します |
 
 </details>
 
@@ -189,9 +219,9 @@ Safe 自身への呼び出しは、復旧用オーナーを加えるもの以外
 
 | 変数 | 既定値 | 役割 |
 | --- | --- | --- |
-| `NYQUIST_ENV` | `production` | `development` にすると、ローカルの API を使います |
+| `NYQUIST_ENV` | `production` | `mainnet` はメインネット、`production` は Sepolia、`development` はローカルの API |
 | `NYQUIST_API_URL` | 環境ごとの API | 接続する nyquist の API |
-| `NYQUIST_RPC_URL` | Sepolia の公開 RPC | 見積もりを確かめるのに使う RPC |
+| `NYQUIST_RPC_URL` | ネットワークの公開 RPC | 見積もりを確かめるのに使う RPC |
 | `NYQUIST_HOME` | `~/.nyquist` | 鍵を置くディレクトリ |
 | `NYQUIST_MAX_FEE_WEI` | 0.01 ETH | 1回の送金で払ってよいガス代の払い戻しの上限 |
 

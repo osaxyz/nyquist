@@ -1,5 +1,5 @@
 import { parseArgs } from "node:util"
-import { cancel, intro, isCancel, log, note, outro, select, spinner } from "@clack/prompts"
+import { cancel, intro, isCancel, log, note, outro, password, select, spinner } from "@clack/prompts"
 import { Keystore, Wallet, loadSettings } from "@nyquist/agent"
 import { formatEther } from "viem"
 import { AGENTS, MCP_SPEC, install, server, type AgentId } from "./agents"
@@ -10,8 +10,8 @@ import { AGENTS, MCP_SPEC, install, server, type AgentId } from "./agents"
 const HELP = `Usage: npm create nyquist [-- options]
 
 Options:
+  --network <name>      mainnet or sepolia
   --agent <id>          claude-code, hermes, openclaw, grok, or other
-  --enrollment <token>  Join an organization with an enrollment token
   -h, --help            Show this help`
 
 // nyquist-mcp も同じ環境変数を読むので、指定されていれば MCP の設定にも渡す。
@@ -19,8 +19,8 @@ const PASSED_ENV = ["NYQUIST_ENV", "NYQUIST_API_URL", "NYQUIST_RPC_URL", "NYQUIS
 
 const { values } = parseArgs({
     options: {
+        network: { type: "string" },
         agent: { type: "string" },
-        enrollment: { type: "string" },
         help: { type: "boolean", short: "h" },
     },
 })
@@ -48,16 +48,64 @@ async function chooseAgent(): Promise<AgentId> {
     return answer
 }
 
+type Network = "mainnet" | "sepolia"
+
+const NETWORKS: { value: Network; label: string; hint: string }[] = [
+    { value: "mainnet", label: "Ethereum mainnet", hint: "real ETH" },
+    { value: "sepolia", label: "Sepolia testnet", hint: "test ETH, no fees" },
+]
+
+// ネットワークごとに、使う設定（NYQUIST_ENV）と MCP の設定での名前を分ける。
+// 鍵のファイルも NYQUIST_ENV ごとに分かれるので、Sepolia の鍵でメインネットのお金は動かない。
+const NETWORK = {
+    mainnet: { environment: "mainnet", name: "nyquist-mainnet" },
+    sepolia: { environment: "production", name: "nyquist" },
+} as const satisfies Record<Network, { environment: string; name: string }>
+
+async function chooseNetwork(): Promise<Network | null> {
+    // 開発用に NYQUIST_ENV を指定しているときは、それに従う。
+    if (process.env.NYQUIST_ENV) {
+        if (values.network) throw new Error("Use either --network or NYQUIST_ENV, not both")
+        return null
+    }
+    if (values.network) {
+        const found = NETWORKS.find((network) => network.value === values.network)
+        if (!found) throw new Error(`Unknown network "${values.network}". Use one of: ${NETWORKS.map((network) => network.value).join(", ")}`)
+        return found.value
+    }
+    const answer = await select({ message: "Which network?", options: NETWORKS })
+    if (isCancel(answer)) {
+        cancel("Cancelled")
+        process.exit(0)
+    }
+    return answer
+}
+
 async function main() {
     intro("nyquist")
+    const network = await chooseNetwork()
+    // Sepolia は既定の設定なので、MCP の設定にも NYQUIST_ENV を書かない。
+    if (network === "mainnet") process.env.NYQUIST_ENV = NETWORK.mainnet.environment
+    const name = process.env.NYQUIST_ENV === "mainnet" ? NETWORK.mainnet.name : NETWORK.sepolia.name
     const agent = await chooseAgent()
 
     // Grok Bot は自分のクラウドのコンピューターで MCP サーバーを動かすので、鍵もそこで作られる。
     // この端末で鍵を作っても使えないので、チャットで頼む文だけを案内する。
     if (agent === "grok") {
-        note(`Add an MCP server called nyquist that runs: npx -y ${MCP_SPEC}`, "Ask Grok Bot in chat")
+        const env = process.env.NYQUIST_ENV === "mainnet" ? ", with the environment variable NYQUIST_ENV=mainnet" : ""
+        note(`Add an MCP server called ${name} that runs: npx -y ${MCP_SPEC}${env}`, "Ask Grok Bot in chat")
         outro("Grok Bot creates the keys on its own computer. Then ask it to call nyquist_setup.")
         return
+    }
+
+    // 登録が招待制のあいだは、招待コードを尋ねる。シェルの履歴に残らないよう、引数では受け取らない。
+    if (process.env.NYQUIST_ENV === "mainnet" && !process.env.NYQUIST_INVITE && loadSettings().config.registration === "invite") {
+        const invite = await password({ message: "Invite code (registration is invite-only for now)" })
+        if (isCancel(invite)) {
+            cancel("Cancelled")
+            process.exit(0)
+        }
+        process.env.NYQUIST_INVITE = invite
     }
 
     const settings = loadSettings()
@@ -74,7 +122,7 @@ async function main() {
     let safe: string
     let feeWei: string
     try {
-        const { agent: registered } = await wallet.setup(values.enrollment)
+        const { agent: registered } = await wallet.setup()
         safe = registered.safe
         feeWei = registered.deploymentFeeWei
     } catch (error) {
@@ -84,7 +132,7 @@ async function main() {
     register.stop(`Registered the wallet  Safe ${short(safe)}`)
 
     const env = Object.fromEntries(PASSED_ENV.flatMap((key) => (process.env[key] ? [[key, process.env[key]!]] : [])))
-    const result = await install(agent, server(env, settings.home, process.env.NYQUIST_MCP_PACKAGE))
+    const result = await install(agent, server(name, env, settings.home, process.env.NYQUIST_MCP_PACKAGE))
     if (result.kind === "manual") {
         log.warn(result.message)
         note(result.snippet)
@@ -99,8 +147,9 @@ async function main() {
             `Chain     ${settings.config.chain.name}`,
             `Key file  ${keystore.path}`,
             "",
-            `Fund the Safe with at least ${formatEther(BigInt(feeWei))} ETH for its creation,`,
-            "plus what you want to send. Then ask your agent:",
+            ...(BigInt(feeWei) === 0n
+                ? ["Fund the Safe with what you want to send, plus gas.", "The first send also creates the Safe. Then ask your agent:"]
+                : [`Fund the Safe with at least ${formatEther(BigInt(feeWei))} ETH for its creation,`, "plus what you want to send. Then ask your agent:"]),
             '"Send 0.01 ETH to 0x…"',
         ].join("\n"),
         "Next",
