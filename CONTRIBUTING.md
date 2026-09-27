@@ -6,8 +6,8 @@
 
 # Contributing to nyquist
 
-How to build, check, and release the nyquist clients.<br>
-<sub>nyquist のクライアントをビルド、確認、公開するための手順です。</sub>
+How to build and check the nyquist clients.<br>
+<sub>nyquist のクライアントをビルドし、確かめるための手順です。</sub>
 
 <p align="center"><a href="#en">Read more in English</a> · <a href="#ja">日本語で読む</a></p>
 
@@ -38,7 +38,7 @@ pnpm exec turbo run typecheck build
 </details>
 
 <details>
-<summary>Try the packages before a release</summary>
+<summary>Try the packages locally</summary>
 <br>
 
 Pack both packages and point `NYQUIST_MCP_PACKAGE` at the nyquist-mcp tarball. The MCP settings then run `npx --prefix=~/.nyquist -y --package <tarball> nyquist-mcp`.
@@ -46,29 +46,6 @@ Pack both packages and point `NYQUIST_MCP_PACKAGE` at the nyquist-mcp tarball. T
 ```sh
 pnpm --filter nyquist-mcp --filter create-nyquist pack --pack-destination "$HOME/.nyquist/dev"
 NYQUIST_MCP_PACKAGE="$HOME/.nyquist/dev/nyquist-mcp-0.1.0.tgz" npx -y --package "$HOME/.nyquist/dev/create-nyquist-0.1.0.tgz" create-nyquist
-```
-
-</details>
-
-<details>
-<summary>Release to npm</summary>
-<br>
-
-The `publish` workflow publishes with npm Trusted Publishing, so no npm token is stored in GitHub. While this repository is public, npm also attaches provenance. Register the following once under Settings → Trusted Publisher of each package on npmjs.com.
-
-| Field | Value |
-| --- | --- |
-| Publisher | GitHub Actions |
-| Organization or user | osaxyz |
-| Repository | nyquist |
-| Workflow filename | publish.yml |
-| Environment name | npm |
-
-After the version bump has been merged into main:
-
-```sh
-gh workflow run publish.yml -f package=nyquist-mcp
-gh workflow run publish.yml -f package=create-nyquist
 ```
 
 </details>
@@ -100,7 +77,7 @@ pnpm exec turbo run typecheck build
 </details>
 
 <details>
-<summary>公開前のパッケージを試す</summary>
+<summary>手元でパッケージを試す</summary>
 <br>
 
 2つのパッケージの tarball を作り、`NYQUIST_MCP_PACKAGE` に nyquist-mcp の tarball を指定します。MCP の設定には `npx --prefix=~/.nyquist -y --package <その tarball> nyquist-mcp` が登録されます。
@@ -108,29 +85,6 @@ pnpm exec turbo run typecheck build
 ```sh
 pnpm --filter nyquist-mcp --filter create-nyquist pack --pack-destination "$HOME/.nyquist/dev"
 NYQUIST_MCP_PACKAGE="$HOME/.nyquist/dev/nyquist-mcp-0.1.0.tgz" npx -y --package "$HOME/.nyquist/dev/create-nyquist-0.1.0.tgz" create-nyquist
-```
-
-</details>
-
-<details>
-<summary>npm への公開</summary>
-<br>
-
-`publish` ワークフローが npm の Trusted Publishing で公開するので、npm のトークンを GitHub に置きません。このリポジトリが公開されている間は provenance も付きます。最初に一度だけ、npmjs.com の各パッケージの Settings → Trusted Publisher に次を登録します。
-
-| 項目 | 値 |
-| --- | --- |
-| Publisher | GitHub Actions |
-| Organization or user | osaxyz |
-| Repository | nyquist |
-| Workflow filename | publish.yml |
-| Environment name | npm |
-
-版を上げて main にマージしたあと、次で公開します。
-
-```sh
-gh workflow run publish.yml -f package=nyquist-mcp
-gh workflow run publish.yml -f package=create-nyquist
 ```
 
 </details>
