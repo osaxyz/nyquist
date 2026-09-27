@@ -1,0 +1,26 @@
+# 型チェックとビルドを確かめ、npm に公開する中身を表示する。
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec turbo run typecheck build
+      - run: pnpm --filter nyquist-mcp --filter create-nyquist pack --pack-destination "$RUNNER_TEMP/package"
+      - run: for file in "$RUNNER_TEMP"/package/*.tgz; do echo "$file"; tar -tzf "$file"; done

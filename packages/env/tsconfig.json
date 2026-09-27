@@ -1,0 +1,4 @@
+{
+  "extends": "@nyquist/tsconfig/base.json",
+  "include": ["src"]
+}

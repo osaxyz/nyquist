@@ -1,0 +1,23 @@
+{
+  "name": "@nyquist/agent",
+  "version": "0.0.0",
+  "description": "エージェントの手元で鍵を持ち、nyquist の API とやりとりする処理。nyquist-mcp と create-nyquist で共有する",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "type": "module",
+  "private": true,
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "devDependencies": {
+    "@nyquist/tsconfig": "workspace:*",
+    "@types/node": "^26.6.2"
+  },
+  "dependencies": {
+    "@nyquist/env": "workspace:*",
+    "@nyquist/safe": "workspace:*",
+    "@nyquist/signature": "workspace:*",
+    "viem": "^2.56.9"
+  }
+}

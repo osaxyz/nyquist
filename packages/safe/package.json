@@ -1,0 +1,19 @@
+{
+  "name": "@nyquist/safe",
+  "version": "0.0.0",
+  "description": "Safe の tx ハッシュ計算とエンコード",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "type": "module",
+  "private": true,
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "devDependencies": {
+    "@nyquist/tsconfig": "workspace:*"
+  },
+  "dependencies": {
+    "viem": "^2.56.9"
+  }
+}
