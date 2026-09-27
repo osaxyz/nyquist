@@ -76,6 +76,10 @@ nyquist の API は、失敗を RFC 9457 の Problem Details（`application/prob
 
 409。SafeTx の nonce が Safe の現在値と一致しません。`GET /api/v1/agent` の `nonce` を使って署名し直してください。
 
+## transaction-pending
+
+409。前に中継した tx がまだ確定していません。同じ nonce の tx を二重に送らないよう、確定するまで新しい送金は受け付けません。`GET /api/v1/transaction/{hash}` で状態を確かめてから送り直してください。
+
 ## quote-expired
 
 409。見積もりが古くなっています。ガス代が上がったか、`baseGas` が足りません。`POST /api/v1/transaction/quote` で見積もり直して署名し直してください。

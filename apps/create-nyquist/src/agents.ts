@@ -79,12 +79,34 @@ function claudeCode(value: Server): Result {
     return { kind: "added", message: "Added nyquist to Claude Code's MCP settings", next: "Start a new Claude Code session to load it." }
 }
 
+// openclaw mcp list --json の出力に nyquist があるか。名前をキーにした形と、name を持つ配列の形の両方を読む。
+// 読めなければ undefined を返す。
+function openClawHasNyquist(output: string): boolean | undefined {
+    let parsed: unknown
+    try {
+        parsed = JSON.parse(output)
+    } catch {
+        return undefined
+    }
+    const servers = typeof parsed === "object" && parsed !== null && "servers" in parsed ? (parsed as { servers: unknown }).servers : parsed
+    if (Array.isArray(servers)) return servers.some((server) => typeof server === "object" && server !== null && (server as { name?: unknown }).name === "nyquist")
+    if (typeof servers === "object" && servers !== null) return Object.hasOwn(servers, "nyquist")
+    return undefined
+}
+
 function openClaw(value: Server): Result {
     const body = JSON.stringify(Object.keys(value.env).length ? value : { command: value.command, args: value.args })
     if (!has("openclaw")) {
         return { kind: "manual", message: "OpenClaw's CLI was not found. Add this under mcp.servers in OpenClaw's config:", snippet: json(value) }
     }
-    // set は同じ名前があれば置き換えるので、何度実行しても同じ設定になる。
+    // set は同じ名前があれば置き換えるので、先に一覧を読み、すでにあれば触らない。
+    // 一覧の形が読めないときも、上書きせずに手で加えてもらう。
+    const listed = run("openclaw", ["mcp", "list", "--json"])
+    const existing = listed.ok ? openClawHasNyquist(listed.output) : undefined
+    if (existing === true) return { kind: "exists", message: "OpenClaw already has an MCP server called nyquist" }
+    if (existing === undefined) {
+        return { kind: "manual", message: "Could not read OpenClaw's MCP settings. Add this under mcp.servers in OpenClaw's config:", snippet: json(value) }
+    }
     const added = run("openclaw", ["mcp", "set", "nyquist", body])
     if (!added.ok) throw new Error(`openclaw mcp set failed: ${added.output}`)
     return { kind: "added", message: "Added nyquist to OpenClaw's MCP settings", next: "Restart the OpenClaw gateway to load it." }

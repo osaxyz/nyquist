@@ -32,6 +32,7 @@ const PROBLEM_MESSAGES: Record<string, string> = {
     "safe-not-funded": "Safe の残高が作成費用に足りません。入金してから送ってください",
     "nonce-mismatch": "Safe の nonce が変わりました。もう一度試してください",
     "quote-expired": "ガス代が変わりました。もう一度試してください",
+    "transaction-pending": "前の送金がまだ確定していません。nyquist_transaction で確定したことを確かめてから送ってください",
     "transaction-reverted": "Safe から呼び出すと失敗します。宛先、金額、Safe の残高（ガス代の払い戻し分を含む）を確認してください",
     "gas-limit-exceeded": "ガス量が nyquist の上限を超えます",
     "rate-limited": "リクエストが多すぎます。少し待ってから試してください",
@@ -46,6 +47,13 @@ function unexpected(error: unknown): string {
     return "RPC または nyquist との通信で予期しないエラーが起きました。少し待ってから試してください"
 }
 
+// 知らない種類はサーバーの文字列をそのまま見せず、不明なエラーとして返す。種類の名前はログにだけ書く。
+function problemMessage(problem: string | undefined): string {
+    if (problem !== undefined && Object.hasOwn(PROBLEM_MESSAGES, problem)) return PROBLEM_MESSAGES[problem]!
+    if (problem !== undefined) console.error("nyquist-mcp: 知らない種類のエラー:", problem)
+    return "不明なエラー"
+}
+
 // 失敗は例外にせず、エージェントが次の行動を決められる文で返す。
 async function run(task: () => Promise<unknown>): Promise<Content> {
     try {
@@ -53,7 +61,7 @@ async function run(task: () => Promise<unknown>): Promise<Content> {
     } catch (error) {
         const message =
             error instanceof ApiError
-                ? `nyquist API が ${error.status} を返しました: ${(error.problem && PROBLEM_MESSAGES[error.problem]) ?? error.problem ?? "不明なエラー"}`
+                ? `nyquist API が ${error.status} を返しました: ${problemMessage(error.problem)}`
                 : error instanceof QuoteRejected
                   ? `見積もりを検証できなかったため、署名していません: ${error.message}`
                   : error instanceof WalletError
@@ -67,15 +75,17 @@ async function run(task: () => Promise<unknown>): Promise<Content> {
 // Agent と送金の結果は @nyquist/agent が形を確かめる。引き取りコードはここで確かめる。
 const CLAIM_CODE = /^nqc_[A-Za-z0-9_-]{1,64}_[0-9a-f]{64}$/
 
-function summarize(agent: Agent) {
+// Safe のアドレス、オーナー、閾値は、鍵ファイルとチェーンから取った値を見せる。サーバーの申告は使わない。
+async function summarize(agent: Agent) {
+    const chain = await wallet.onchain()
     return {
-        safe: agent.safe,
+        safe: chain.safe,
         balance: `${formatEther(BigInt(agent.balanceWei))} ETH`,
         chain: settings.config.chain.name,
-        deployed: agent.deployed,
+        deployed: chain.deployed,
         deploymentFee: `${formatEther(BigInt(agent.deploymentFeeWei))} ETH`,
-        owners: agent.owners,
-        threshold: agent.threshold,
+        owners: chain.owners,
+        threshold: chain.threshold,
         // アドレスそのものは見せない。見せると、人間から教わったアドレスと突き合わせる確認を、
         // モデルがここから写すだけで通れてしまう。乗っ取られたサーバーが自分のアドレスを入れても防げるようにする。
         recoveryOwnerRegistered: agent.recoveryOwner !== null,
@@ -108,7 +118,7 @@ server.registerTool(
         run(async () => {
             const { agent, created } = await wallet.setup(enrollment)
             return {
-                ...summarize(agent),
+                ...(await summarize(agent)),
                 keyCreated: created,
                 keyFile: keystore.path,
                 note: "鍵ファイルを失うと、このウォレットの資金を動かせなくなります。復旧用オーナーを加えるまでは、少額で使ってください。",
@@ -124,7 +134,7 @@ server.registerTool(
             "Safe のアドレス、残高、オーナー、所属する組織、復旧用オーナーが登録されているかを返す。復旧用オーナーのアドレスは返さないので、引き取った人間に直接教えてもらう。",
         annotations: { readOnlyHint: true, openWorldHint: true },
     },
-    async () => run(async () => summarize(await wallet.info())),
+    async () => run(async () => await summarize(await wallet.info())),
 )
 
 server.registerTool(
@@ -158,6 +168,8 @@ server.registerTool(
             return {
                 ...result,
                 feeLimit: `${formatEther(BigInt(result.feeLimitWei))} ETH`,
+                // feeLimit のうち、nyquist の手数料の分。ガス代への上乗せで、送金額には連動しない。
+                serviceFeeLimit: `${formatEther(BigInt(result.serviceFeeLimitWei))} ETH`,
                 ...(before.deployed
                     ? {}
                     : {

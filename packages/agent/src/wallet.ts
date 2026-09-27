@@ -56,6 +56,7 @@ type Quote = {
     refundReceiver: Address
     safeTxHash: Hex
     maxFeeWei: string
+    feeGas: string
 }
 
 export type TransactionResult = { hash: Hex; safeTxHash: Hex; status: "pending" | "success" | "failed" | "reverted" | "dropped" }
@@ -125,6 +126,7 @@ function parseQuote(json: unknown): Quote {
         refundReceiver: address(value.refundReceiver),
         safeTxHash: hash(value.safeTxHash),
         maxFeeWei: decimal(value.maxFeeWei),
+        feeGas: decimal(value.feeGas),
     }
 }
 
@@ -262,7 +264,7 @@ export class Wallet {
 
     // 見積もりを受け取り、手元で検証してから署名して送る。
     // Safe 自身への呼び出しは、オーナーやモジュールを書き換えて Safe を明け渡せるので受け付けない。
-    async send(call: Call): Promise<TransactionResult & { feeLimitWei: string }> {
+    async send(call: Call): Promise<TransactionResult & { feeLimitWei: string; serviceFeeLimitWei: string }> {
         const keys = await this.#keys()
         if (isAddressEqual(call.to, keys.registration!.safe)) {
             throw new WalletError("Safe 自身は宛先にできません")
@@ -270,7 +272,7 @@ export class Wallet {
         return this.#send(keys, call)
     }
 
-    async #send(keys: Keys, call: Call): Promise<TransactionResult & { feeLimitWei: string }> {
+    async #send(keys: Keys, call: Call): Promise<TransactionResult & { feeLimitWei: string; serviceFeeLimitWei: string }> {
         const safe = keys.registration!.safe
         const quote = parseQuote(await this.#request<unknown>(keys, "POST", "/api/v1/transaction/quote", {
             to: call.to,
@@ -289,7 +291,12 @@ export class Wallet {
             gasPrice: tx.gasPrice.toString(),
             signature,
         }))
-        return { ...result, feeLimitWei: ((tx.safeTxGas + tx.baseGas) * tx.gasPrice).toString() }
+        return {
+            ...result,
+            feeLimitWei: ((tx.safeTxGas + tx.baseGas) * tx.gasPrice).toString(),
+            // 払い戻しのうち、リレイヤーの手数料の分の上限。
+            serviceFeeLimitWei: (BigInt(quote.feeGas) * tx.gasPrice).toString(),
+        }
     }
 
     // 引き取ったアカウントの owner を、Safe の復旧用オーナーに加える。
@@ -312,6 +319,21 @@ export class Wallet {
     }
 
     // Safe のオーナーをチェーンから読む。作成前は自分の signer だけ。
+    // Safe のオーナーと閾値をチェーンから読む。サーバーの申告は使わない。作成前は自分の signer だけ。
+    // サーバーの申告をそのままエージェントに見せると、乗っ取られたサーバーが攻撃者のアドレスを混ぜられる。
+    async onchain(): Promise<{ safe: Address; owners: Address[]; threshold: number; deployed: boolean }> {
+        const keys = await this.#keys()
+        const safe = keys.registration!.safe
+        const client = this.#client()
+        const code = await client.getCode({ address: safe })
+        if (code === undefined || code === "0x") return { safe, owners: [keys.signer.address], threshold: 1, deployed: false }
+        const [owners, threshold] = await Promise.all([
+            client.readContract({ address: safe, abi: SAFE_ABI, functionName: "getOwners" }),
+            client.readContract({ address: safe, abi: SAFE_ABI, functionName: "getThreshold" }),
+        ])
+        return { safe, owners: owners.map((owner) => getAddress(owner)), threshold: Number(threshold), deployed: true }
+    }
+
     async #owners(safe: Address): Promise<readonly Address[]> {
         const client = this.#client()
         const code = await client.getCode({ address: safe })
@@ -352,7 +374,11 @@ export class Wallet {
         const intrinsic = 21_000n + calldataGas(calldata)
         const floor = calldataFloorGas(calldata)
         const overhead = BigInt(config.relayer.baseGasOverhead) + BigInt(config.relayer.firstExecutionGas)
-        const baseGasLimit = (intrinsic > floor ? intrinsic : floor) + overhead * 2n
+        const gasLimit = (intrinsic > floor ? intrinsic : floor) + overhead * 2n
+        // リレイヤーの手数料は、公開している割合（relayer.feeBps）までしか受け付けない。
+        const feeLimit = ((tx.safeTxGas + gasLimit) * BigInt(config.relayer.feeBps)) / 10_000n
+        if (BigInt(quote.feeGas) > feeLimit) throw new QuoteRejected("手数料が公開している割合を超えています")
+        const baseGasLimit = gasLimit + feeLimit
         if (tx.baseGas > baseGasLimit) throw new QuoteRejected(`baseGas が大きすぎます。上限は ${baseGasLimit} です`)
         if (tx.safeTxGas > BigInt(config.relayer.gasLimitCap)) throw new QuoteRejected("safeTxGas が大きすぎます")
 

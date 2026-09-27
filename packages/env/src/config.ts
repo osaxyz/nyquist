@@ -44,6 +44,8 @@ export type Config = {
         undeployedSafeTxGas: number
         gasPriceMultiplier: number
         deploymentFeeWei: string
+        // リレイヤーの手数料。Safe 内の呼び出しと baseGas の見積もりに掛ける割合（1 bps = 0.01%）。
+        feeBps: number
     }
     claim: {
         ttlSeconds: number
@@ -71,6 +73,10 @@ const SEPOLIA: ChainConfig = {
 // メインネット。法的確認が済むまで CONFIG には入れない。入れるときは、この値と relayerAddress を使う。
 // 送信は Flashbots Protect に送り、公開の mempool に出さない。calldata を写して先に実行され、
 // リレイヤーの tx が revert してガス代だけを失うのを防ぐ。読み取りは公開の RPC で行う。
+// メインネットのリレイヤーの手数料。メインネットを CONFIG に入れるときに relayer.feeBps に使う。
+// bundler や paymaster と同じく、ガス代への上乗せとして受け取る。送金額には連動させない。
+export const MAINNET_FEE_BPS = 500
+
 export const MAINNET: ChainConfig = {
     id: 1,
     name: "Ethereum",
@@ -114,6 +120,8 @@ const SHARED = {
         // Safe を作るときに setup の payment でリレイヤーに払ってもらう額。
         // 作成時点のガス代がこれを超えるなら、下がるまで作成を待つ。
         deploymentFeeWei: "2000000000000000",
+        // Sepolia の ETH には価値がないので、テストネットでは取らない。
+        feeBps: 0,
     },
     claim: {
         ttlSeconds: 86_400,

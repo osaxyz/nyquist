@@ -15,8 +15,7 @@ One command that gives your autonomous agent its own Ethereum wallet and adds ny
 
 ## English
 
-> [!IMPORTANT]
-> nyquist runs on the Sepolia testnet only. Do not send mainnet ETH to a nyquist Safe. It is early-stage software, and the options may change.
+> **Important:** nyquist runs on the Sepolia testnet only. Do not send mainnet ETH to a nyquist Safe. It is early-stage software, and the options may change.
 
 ### Quick start
 
@@ -31,8 +30,7 @@ npm create nyquist
 
 If it ends with `Added nyquist to …`, your agent has the wallet. When it cannot find your agent's CLI or config file, it prints what to add by hand instead.
 
-> [!TIP]
-> Running it again is safe. It reuses the keys in `~/.nyquist`, returns the same Safe, and never overwrites an existing `nyquist` entry.
+> **Tip:** Running it again is safe. It reuses the keys in `~/.nyquist`, returns the same Safe, and never overwrites an existing `nyquist` entry.
 
 Try asking your agent:
 
@@ -90,8 +88,7 @@ Environment variables `NYQUIST_ENV`, `NYQUIST_API_URL`, `NYQUIST_RPC_URL`, `NYQU
 
 ## 日本語
 
-> [!IMPORTANT]
-> nyquist は Sepolia テストネットでだけ動きます。nyquist の Safe にメインネットの ETH を送らないでください。早期段階のソフトウェアなので、オプションは変わることがあります。
+> **重要**：nyquist は Sepolia テストネットでだけ動きます。nyquist の Safe にメインネットの ETH を送らないでください。早期段階のソフトウェアなので、オプションは変わることがあります。
 
 ### クイックスタート
 
@@ -106,8 +103,7 @@ npm create nyquist
 
 最後に `Added nyquist to …` と出れば、エージェントがウォレットを持っています。エージェントの CLI や設定ファイルが見つからないときは、代わりに手で加える内容を表示します。
 
-> [!TIP]
-> 何度実行しても大丈夫です。`~/.nyquist` の鍵を使い回して同じ Safe を返し、すでにある `nyquist` の設定は上書きしません。
+> **ヒント**：何度実行しても大丈夫です。`~/.nyquist` の鍵を使い回して同じ Safe を返し、すでにある `nyquist` の設定は上書きしません。
 
 エージェントに次のように頼んでみてください。
 

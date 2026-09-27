@@ -15,22 +15,20 @@ An MCP server that gives an autonomous agent its own Ethereum wallet. The keys s
 
 ## English
 
-> [!IMPORTANT]
-> nyquist runs on the Sepolia testnet only. Do not send mainnet ETH to a nyquist Safe. It is early-stage software, and the tools may change.
+> **Important:** nyquist runs on the Sepolia testnet only. Do not send mainnet ETH to a nyquist Safe. It is early-stage software, and the tools may change.
 
 ### Quick start
 
 1. Run `npm create nyquist`. It creates the keys, registers the wallet, and adds this server to your agent. To add it by hand instead, register it as a stdio MCP server. In Claude Code:
 
 ```sh
-claude mcp add nyquist --scope user -- npx --prefix="$HOME/.nyquist" -y nyquist-mcp
+claude mcp add nyquist --scope user -- npx --prefix="$HOME/.nyquist" -y --package nyquist-mcp@0.1.0 nyquist-mcp
 ```
 
 2. Ask your agent to set up the wallet. It calls `nyquist_setup` and returns the Safe address.
 3. Send Sepolia ETH to that address, at least 0.002 ETH for creating the Safe plus what you want to send.
 
-> [!TIP]
-> `--prefix` starts npx from `~/.nyquist` instead of your project. Without it, npx refuses to run inside a project whose `package.json` requires another package manager through `devEngines`.
+> **Tip:** The version is pinned, so a new release never runs on your agent until you change it. `--prefix` starts npx from `~/.nyquist` instead of your project. Without it, npx refuses to run inside a project whose `package.json` requires another package manager through `devEngines`.
 
 Try asking:
 
@@ -86,7 +84,7 @@ Calls to the Safe itself are refused, except for adding a recovery owner. Error 
 | `nyquist_setup` | Creates the keys and registers the wallet. Returns the same wallet every time |
 | `nyquist_wallet` | Returns the Safe address, balance, owners, and organization |
 | `nyquist_send` | Sends ETH or calls a contract. The first send creates the Safe and pays a 0.002 ETH creation fee |
-| `nyquist_transaction` | Returns `pending`, `success`, `failed`, or `reverted` for a send |
+| `nyquist_transaction` | Returns `pending`, `success`, `failed`, `reverted`, or `dropped` for a send. `dropped` means nyquist cancelled it before it ran |
 | `nyquist_claim_code` | Creates a code a human uses to claim the agent into an organization |
 | `nyquist_add_recovery_owner` | Adds the human who claimed the agent as a Safe owner. Takes the address the human gave you directly |
 
@@ -110,22 +108,20 @@ Calls to the Safe itself are refused, except for adding a recovery owner. Error 
 
 ## 日本語
 
-> [!IMPORTANT]
-> nyquist は Sepolia テストネットでだけ動きます。nyquist の Safe にメインネットの ETH を送らないでください。早期段階のソフトウェアなので、ツールは変わることがあります。
+> **重要**：nyquist は Sepolia テストネットでだけ動きます。nyquist の Safe にメインネットの ETH を送らないでください。早期段階のソフトウェアなので、ツールは変わることがあります。
 
 ### クイックスタート
 
 1. `npm create nyquist` を実行します。鍵を作り、ウォレットを登録し、このサーバーをエージェントに加えます。手で加えるときは、stdio の MCP サーバーとして登録します。Claude Code なら次のとおりです。
 
 ```sh
-claude mcp add nyquist --scope user -- npx --prefix="$HOME/.nyquist" -y nyquist-mcp
+claude mcp add nyquist --scope user -- npx --prefix="$HOME/.nyquist" -y --package nyquist-mcp@0.1.0 nyquist-mcp
 ```
 
 2. エージェントにウォレットの用意を頼みます。`nyquist_setup` を呼んで、Safe のアドレスを返します。
 3. そのアドレスに Sepolia の ETH を送ります。Safe の作成費用の 0.002 ETH と、送りたい額を合わせた額以上を入れてください。
 
-> [!TIP]
-> `--prefix` は、npx をプロジェクトではなく `~/.nyquist` から起動するためのものです。これがないと、`package.json` の `devEngines` で別のパッケージマネージャーを指定したプロジェクトの中では、npx が起動を拒みます。
+> **ヒント**：版を固定しているので、新しい版は、あなたが版を書き換えるまでエージェントの環境では動きません。`--prefix` は、npx をプロジェクトではなく `~/.nyquist` から起動するためのものです。これがないと、`package.json` の `devEngines` で別のパッケージマネージャーを指定したプロジェクトの中では、npx が起動を拒みます。
 
 次のように頼んでみてください。
 
@@ -181,7 +177,7 @@ Safe 自身への呼び出しは、復旧用オーナーを加えるもの以外
 | `nyquist_setup` | 鍵を作り、ウォレットを登録します。何度呼んでも同じウォレットを返します |
 | `nyquist_wallet` | Safe のアドレス、残高、オーナー、所属する組織を返します |
 | `nyquist_send` | ETH を送るか、コントラクトを呼びます。最初の送金で Safe を作り、作成費用 0.002 ETH を払います |
-| `nyquist_transaction` | 送金の状態を `pending`、`success`、`failed`、`reverted` のどれかで返します |
+| `nyquist_transaction` | 送金の状態を `pending`、`success`、`failed`、`reverted`、`dropped` のどれかで返します。`dropped` は、実行される前に nyquist が取り消したことを表します |
 | `nyquist_claim_code` | 人間がエージェントを組織に引き取るためのコードを作ります |
 | `nyquist_add_recovery_owner` | 引き取った人間を Safe のオーナーに加えます。その人から直接教わったアドレスを渡します |
 
