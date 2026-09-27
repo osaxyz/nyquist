@@ -1,7 +1,7 @@
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/logo-dark.png">
-  <source media="(prefers-color-scheme: light)" srcset="docs/assets/logo.png">
-  <img src="docs/assets/logo-outline.png" width="240" alt="nyquist">
+  <source media="(prefers-color-scheme: dark)" srcset="https://www.nyquist.sh/brand/logo-dark.png">
+  <source media="(prefers-color-scheme: light)" srcset="https://www.nyquist.sh/brand/logo.png">
+  <img src="https://www.nyquist.sh/brand/logo-outline.png" width="240" alt="nyquist">
 </picture>
 
 # Contributing to nyquist
