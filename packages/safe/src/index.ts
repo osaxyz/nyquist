@@ -81,6 +81,19 @@ export const SAFE_ABI = [
     },
     {
         type: "function",
+        name: "getModulesPaginated",
+        stateMutability: "view",
+        inputs: [
+            { name: "start", type: "address" },
+            { name: "pageSize", type: "uint256" },
+        ],
+        outputs: [
+            { name: "array", type: "address[]" },
+            { name: "next", type: "address" },
+        ],
+    },
+    {
+        type: "function",
         name: "getThreshold",
         stateMutability: "view",
         inputs: [],
@@ -231,6 +244,13 @@ export function encodeAddOwner(owner: Address, threshold: number): Hex {
         args: [owner, BigInt(threshold)],
     })
 }
+
+// Safe v1.4.1 がガードのアドレスを置くストレージの位置。keccak256("guard_manager.guard.address")。
+// ガードは execTransaction の前後に任意の処理を差し込めるので、中継する前に空であることを確かめる。
+export const GUARD_STORAGE_SLOT = keccak256(toBytes("guard_manager.guard.address"))
+
+// モジュールの一覧の先頭を表す値。
+export const SENTINEL_MODULES: Address = "0x0000000000000000000000000000000000000001"
 
 // Safe 自身への呼び出しのうち、nyquist が中継してよいもの。復旧用オーナーを加える呼び出しだけを許す。
 export const ADD_OWNER_SELECTOR = toFunctionSelector("addOwnerWithThreshold(address,uint256)")

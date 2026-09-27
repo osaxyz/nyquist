@@ -3,6 +3,7 @@ import {
     defineChain,
     getAddress,
     http,
+    isAddress,
     isAddressEqual,
     zeroAddress,
     type Address,
@@ -22,6 +23,7 @@ import {
     type SafeTransaction,
 } from "@nyquist/safe"
 import { signRequest } from "@nyquist/signature"
+import { WalletError } from "./errors"
 import type { Keys, Keystore } from "./keystore"
 import type { Settings } from "./settings"
 
@@ -56,7 +58,82 @@ type Quote = {
     maxFeeWei: string
 }
 
-export type TransactionResult = { hash: Hex; safeTxHash: Hex; status: "pending" | "success" | "failed" | "reverted" }
+export type TransactionResult = { hash: Hex; safeTxHash: Hex; status: "pending" | "success" | "failed" | "reverted" | "dropped" }
+
+// サーバーの応答は、形を確かめてから使う。形の違う値や余計な項目を、そのままエージェントに渡さない。
+const HASH = /^0x[0-9a-fA-F]{64}$/
+const DECIMAL = /^(0|[1-9][0-9]{0,77})$/
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
+const STATUSES = ["pending", "success", "failed", "reverted", "dropped"] as const
+
+function malformed(): never {
+    throw new WalletError("nyquist の応答の形が正しくありません")
+}
+
+function address(value: unknown): Address {
+    if (typeof value !== "string" || !isAddress(value, { strict: false })) malformed()
+    return getAddress(value)
+}
+
+function decimal(value: unknown): string {
+    if (typeof value !== "string" || !DECIMAL.test(value)) malformed()
+    return value
+}
+
+function hash(value: unknown): Hex {
+    if (typeof value !== "string" || !HASH.test(value)) malformed()
+    return value.toLowerCase() as Hex
+}
+
+function parseAgent(json: unknown): Agent {
+    if (typeof json !== "object" || json === null) malformed()
+    const value = json as Record<string, unknown>
+    if (typeof value.id !== "string" || !/^[A-Za-z0-9_-]{43}$/.test(value.id)) malformed()
+    if (value.accountId !== null && (typeof value.accountId !== "string" || !UUID.test(value.accountId))) malformed()
+    if (value.status !== "active" && value.status !== "suspended") malformed()
+    if (!Array.isArray(value.owners) || typeof value.threshold !== "number" || !Number.isInteger(value.threshold)) malformed()
+    if (typeof value.deployed !== "boolean" || typeof value.createdAt !== "string") malformed()
+    return {
+        id: value.id,
+        accountId: value.accountId,
+        status: value.status,
+        signer: address(value.signer),
+        safe: address(value.safe),
+        owners: value.owners.map(address),
+        threshold: value.threshold,
+        recoveryOwner: value.recoveryOwner === null ? null : address(value.recoveryOwner),
+        deployed: value.deployed,
+        balanceWei: decimal(value.balanceWei),
+        nonce: decimal(value.nonce),
+        deploymentFeeWei: decimal(value.deploymentFeeWei),
+        createdAt: Number.isNaN(Date.parse(value.createdAt)) ? malformed() : new Date(value.createdAt).toISOString(),
+    }
+}
+
+function parseQuote(json: unknown): Quote {
+    if (typeof json !== "object" || json === null) malformed()
+    const value = json as Record<string, unknown>
+    if (typeof value.chainId !== "number") malformed()
+    return {
+        safe: address(value.safe),
+        chainId: value.chainId,
+        nonce: decimal(value.nonce),
+        safeTxGas: decimal(value.safeTxGas),
+        baseGas: decimal(value.baseGas),
+        gasPrice: decimal(value.gasPrice),
+        gasToken: address(value.gasToken),
+        refundReceiver: address(value.refundReceiver),
+        safeTxHash: hash(value.safeTxHash),
+        maxFeeWei: decimal(value.maxFeeWei),
+    }
+}
+
+function parseTransaction(json: unknown): TransactionResult {
+    if (typeof json !== "object" || json === null) malformed()
+    const value = json as Record<string, unknown>
+    const status = STATUSES.find((candidate) => candidate === value.status) ?? malformed()
+    return { hash: hash(value.hash), safeTxHash: hash(value.safeTxHash), status }
+}
 
 export class ApiError extends Error {
     override name = "ApiError"
@@ -127,7 +204,7 @@ export class Wallet {
 
     async #keys(): Promise<Keys> {
         const keys = await this.#keystore.load()
-        if (!keys?.registration) throw new Error("ウォレットがまだありません。先に nyquist_setup を呼んでください")
+        if (!keys?.registration) throw new WalletError("ウォレットがまだありません。先に nyquist_setup を呼んでください")
         return keys
     }
 
@@ -141,18 +218,27 @@ export class Wallet {
             }
             return { agent: await this.info(), created: false }
         }
-        const agent = await this.#request<Agent>(keys, "POST", "/api/v1/agent", {
-            publicKey: keys.publicKey,
-            signer: keys.signer.address,
-            ...(enrollment ? { enrollment } : {}),
-        })
+        let agent: Agent
+        try {
+            agent = parseAgent(
+                await this.#request<unknown>(keys, "POST", "/api/v1/agent", {
+                    publicKey: keys.publicKey,
+                    signer: keys.signer.address,
+                    ...(enrollment ? { enrollment } : {}),
+                }),
+            )
+        } catch (error) {
+            // 登録は済んだのに、鍵ファイルへの記録の前に止まっていた場合。同じ確かめ方をしてから記録し直す。
+            if (!(error instanceof ApiError) || error.problem !== "agent-exists") throw error
+            agent = parseAgent(await this.#request<unknown>(keys, "GET", "/api/v1/agent"))
+        }
         // 返ってきた Safe が自分の鍵だけをオーナーにしているかを、アドレスを手元で計算して確かめてから保存する。
         // id や signer はサーバーの申告なので、それだけでは Safe がすり替えられていないことの証明にならない。
         if (agent.id !== keys.agentId || !isAddressEqual(agent.signer, keys.signer.address) || agent.threshold !== 1) {
             throw new QuoteRejected("登録の応答がこの鍵と一致しません")
         }
         if (!isAddressEqual(agent.safe, expected)) {
-            throw new QuoteRejected(`サーバーが返した Safe ${agent.safe} が、この鍵から計算した ${expected} と一致しません`)
+            throw new QuoteRejected(`サーバーが返した Safe が、この鍵から計算した ${expected} と一致しません`)
         }
         if (agent.deploymentFeeWei !== this.#settings.config.relayer.deploymentFeeWei) {
             throw new QuoteRejected("Safe の作成費用が公開されている値と違います")
@@ -163,7 +249,7 @@ export class Wallet {
 
     async info(): Promise<Agent> {
         const keys = await this.#keys()
-        return this.#request<Agent>(keys, "GET", "/api/v1/agent")
+        return parseAgent(await this.#request<unknown>(keys, "GET", "/api/v1/agent"))
     }
 
     async claim(): Promise<{ code: string; expiresAt: string }> {
@@ -171,7 +257,7 @@ export class Wallet {
     }
 
     async transaction(hash: Hex): Promise<TransactionResult> {
-        return this.#request(await this.#keys(), "GET", `/api/v1/transaction/${hash}`)
+        return parseTransaction(await this.#request<unknown>(await this.#keys(), "GET", `/api/v1/transaction/${hash}`))
     }
 
     // 見積もりを受け取り、手元で検証してから署名して送る。
@@ -179,21 +265,21 @@ export class Wallet {
     async send(call: Call): Promise<TransactionResult & { feeLimitWei: string }> {
         const keys = await this.#keys()
         if (isAddressEqual(call.to, keys.registration!.safe)) {
-            throw new Error("Safe 自身は宛先にできません")
+            throw new WalletError("Safe 自身は宛先にできません")
         }
         return this.#send(keys, call)
     }
 
     async #send(keys: Keys, call: Call): Promise<TransactionResult & { feeLimitWei: string }> {
         const safe = keys.registration!.safe
-        const quote = await this.#request<Quote>(keys, "POST", "/api/v1/transaction/quote", {
+        const quote = parseQuote(await this.#request<unknown>(keys, "POST", "/api/v1/transaction/quote", {
             to: call.to,
             value: call.value.toString(),
             data: call.data,
-        })
+        }))
         const tx = await this.#verify(quote, safe, call)
         const signature = await keys.signer.signTypedData(safeTypedData(this.#settings.config.chain.id, safe, tx))
-        const result = await this.#request<TransactionResult>(keys, "POST", "/api/v1/transaction", {
+        const result = parseTransaction(await this.#request<unknown>(keys, "POST", "/api/v1/transaction", {
             to: tx.to,
             value: tx.value.toString(),
             data: tx.data,
@@ -202,7 +288,7 @@ export class Wallet {
             baseGas: tx.baseGas.toString(),
             gasPrice: tx.gasPrice.toString(),
             signature,
-        })
+        }))
         return { ...result, feeLimitWei: ((tx.safeTxGas + tx.baseGas) * tx.gasPrice).toString() }
     }
 
@@ -215,11 +301,11 @@ export class Wallet {
         const owner = getAddress(expected)
         const agent = await this.info()
         if (!agent.recoveryOwner || !isAddressEqual(agent.recoveryOwner, owner)) {
-            throw new Error("人間から受け取ったアドレスが、nyquist に登録された復旧用オーナーと一致しません")
+            throw new WalletError("人間から受け取ったアドレスが、nyquist に登録された復旧用オーナーと一致しません")
         }
         const owners = await this.#owners(safe)
         if (owners.some((address) => isAddressEqual(address, owner))) {
-            throw new Error(`${owner} はすでに Safe のオーナーです`)
+            throw new WalletError(`${owner} はすでに Safe のオーナーです`)
         }
         const result = await this.#send(keys, { to: safe, value: 0n, data: encodeAddOwner(owner, 1) })
         return { ...result, owner }

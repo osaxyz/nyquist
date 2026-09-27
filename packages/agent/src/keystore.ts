@@ -1,8 +1,10 @@
 import { chmod, mkdir, open, readFile, rename, writeFile } from "node:fs/promises"
+import { randomUUID } from "node:crypto"
 import { join } from "node:path"
 import { generatePrivateKey, privateKeyToAccount, type PrivateKeyAccount } from "viem/accounts"
 import type { Address } from "viem"
 import { exportPublicJwk, generateKeyPair, thumbprint, type PublicJwk } from "@nyquist/signature"
+import { WalletError } from "./errors"
 
 // 鍵はこの端末の中だけに置く。nyquist のサーバーにも、MCP の応答にも出さない。
 // secp256k1 の鍵は Safe の唯一のオーナーなので、失うと資金を動かせなくなる。
@@ -58,7 +60,8 @@ export class Keystore {
             return
         }
         // 書き換えは一時ファイルに書いてから置き換える。途中で止まっても、元の鍵ファイルは壊れない。
-        const temporary = `${this.#path}.${process.pid}.tmp`
+        // 名前を推測されにくくし、前に止まったときの一時ファイルとも重ならないようにする。
+        const temporary = `${this.#path}.${randomUUID()}.tmp`
         const handle = await open(temporary, "wx", 0o600)
         try {
             await handle.writeFile(body)
@@ -107,7 +110,7 @@ export class Keystore {
 
     async saveRegistration(registration: { agentId: string; safe: Address }): Promise<void> {
         const file = await this.#read()
-        if (!file) throw new Error("鍵ファイルがありません")
+        if (!file) throw new WalletError("鍵ファイルがありません")
         await this.#write({ ...file, registration }, false)
     }
 }
