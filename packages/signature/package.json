@@ -1,0 +1,19 @@
+{
+  "name": "@nyquist/signature",
+  "version": "0.0.0",
+  "description": "RFC 9421 の HTTP メッセージ署名",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "type": "module",
+  "private": true,
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "devDependencies": {
+    "@nyquist/tsconfig": "workspace:*"
+  },
+  "dependencies": {
+    "structured-headers": "^2.1.0"
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "name": "@nyquist/env",
+  "version": "0.0.0",
+  "description": "nyquist の設定値。クライアントが接続先とチェーン、Safe、リレイヤーを確かめるのに使う",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "type": "module",
+  "private": true,
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "devDependencies": {
+    "@nyquist/tsconfig": "workspace:*"
+  },
+  "dependencies": {
+    "zod": "^4.6.5"
+  }
+}

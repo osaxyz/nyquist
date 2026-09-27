@@ -1,0 +1,21 @@
+{
+  "name": "nyquist",
+  "license": "Apache-2.0",
+  "scripts": {
+    "build": "turbo run build",
+    "typecheck": "turbo run typecheck"
+  },
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "^11.0.9",
+      "onFail": "download"
+    }
+  },
+  "type": "module",
+  "private": true,
+  "devDependencies": {
+    "turbo": "^2.11.4",
+    "typescript": "^7.0.2"
+  }
+}

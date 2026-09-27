@@ -1,0 +1,45 @@
+# nyquist-mcp と create-nyquist を npm に公開する。
+# npm の Trusted Publishing（OIDC）で認証するので、npm のトークンを GitHub に置かない。
+# リポジトリが公開されていれば、どのコミットからビルドしたかを示す provenance も付ける。
+name: publish
+
+on:
+  workflow_dispatch:
+    inputs:
+      package:
+        description: 公開するパッケージ
+        type: choice
+        options:
+          - nyquist-mcp
+          - create-nyquist
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    # npm の Trusted Publishing の設定で、この environment 名を指定する。
+    environment: npm
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      # Trusted Publishing には npm 11.5.1 以上が要る。
+      - run: npm install -g npm@latest
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec turbo run typecheck build --filter=${{ inputs.package }}
+      # workspace の参照を版に置き換えた tarball を作り、それを npm で公開する。
+      - run: pnpm --filter ${{ inputs.package }} pack --pack-destination "$RUNNER_TEMP/package"
+      # リポジトリの package.json は devEngines で pnpm を指定しているので、npm はリポジトリの外で動かす。
+      - name: npm publish
+        working-directory: ${{ runner.temp }}/package
+        env:
+          PROVENANCE: ${{ github.event.repository.private && 'false' || 'true' }}
+        run: npm publish ./*.tgz --access public --provenance="$PROVENANCE"
