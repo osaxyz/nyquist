@@ -45,7 +45,7 @@ Pack both packages and point `NYQUIST_MCP_PACKAGE` at the nyquist-mcp tarball. T
 
 ```sh
 pnpm --filter nyquist-mcp --filter create-nyquist pack --pack-destination "$HOME/.nyquist/dev"
-NYQUIST_MCP_PACKAGE="$HOME/.nyquist/dev/nyquist-mcp-0.1.0.tgz" npx -y --package "$HOME/.nyquist/dev/create-nyquist-0.1.0.tgz" create-nyquist
+NYQUIST_MCP_PACKAGE="$HOME/.nyquist/dev/nyquist-mcp-0.1.1.tgz" npx -y --package "$HOME/.nyquist/dev/create-nyquist-0.1.1.tgz" create-nyquist
 ```
 
 </details>
@@ -84,7 +84,7 @@ pnpm exec turbo run typecheck build
 
 ```sh
 pnpm --filter nyquist-mcp --filter create-nyquist pack --pack-destination "$HOME/.nyquist/dev"
-NYQUIST_MCP_PACKAGE="$HOME/.nyquist/dev/nyquist-mcp-0.1.0.tgz" npx -y --package "$HOME/.nyquist/dev/create-nyquist-0.1.0.tgz" create-nyquist
+NYQUIST_MCP_PACKAGE="$HOME/.nyquist/dev/nyquist-mcp-0.1.1.tgz" npx -y --package "$HOME/.nyquist/dev/create-nyquist-0.1.1.tgz" create-nyquist
 ```
 
 </details>

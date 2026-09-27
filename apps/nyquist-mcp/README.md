@@ -22,7 +22,7 @@ An MCP server that gives an autonomous agent its own Ethereum wallet. The keys s
 1. Run `npm create nyquist`. It creates the keys, registers the wallet, and adds this server to your agent. To add it by hand instead, register it as a stdio MCP server. In Claude Code:
 
 ```sh
-claude mcp add nyquist --scope user -- npx --prefix="$HOME/.nyquist" -y --package nyquist-mcp@0.1.0 nyquist-mcp
+claude mcp add nyquist --scope user -- npx --prefix="$HOME/.nyquist" -y --package nyquist-mcp@0.1.1 nyquist-mcp
 ```
 
 2. Ask your agent to set up the wallet. It calls `nyquist_setup` and returns the Safe address.
@@ -115,7 +115,7 @@ Calls to the Safe itself are refused, except for adding a recovery owner. Error 
 1. `npm create nyquist` を実行します。鍵を作り、ウォレットを登録し、このサーバーをエージェントに加えます。手で加えるときは、stdio の MCP サーバーとして登録します。Claude Code なら次のとおりです。
 
 ```sh
-claude mcp add nyquist --scope user -- npx --prefix="$HOME/.nyquist" -y --package nyquist-mcp@0.1.0 nyquist-mcp
+claude mcp add nyquist --scope user -- npx --prefix="$HOME/.nyquist" -y --package nyquist-mcp@0.1.1 nyquist-mcp
 ```
 
 2. エージェントにウォレットの用意を頼みます。`nyquist_setup` を呼んで、Safe のアドレスを返します。

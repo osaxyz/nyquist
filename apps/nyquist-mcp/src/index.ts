@@ -8,7 +8,9 @@ const settings = loadSettings()
 const keystore = new Keystore(settings.home, settings.environment)
 const wallet = new Wallet(settings, keystore)
 
-const server = new McpServer({ name: "nyquist", version: "0.1.0" })
+// ビルド時に package.json の版を埋め込む。tsx で直接動かしたときは埋め込まれない。
+declare const __VERSION__: string | undefined
+const server = new McpServer({ name: "nyquist", version: typeof __VERSION__ === "string" ? __VERSION__ : "0.0.0-dev" })
 
 type Content = { content: { type: "text"; text: string }[]; isError?: boolean }
 
